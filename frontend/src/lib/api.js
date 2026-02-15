@@ -1,7 +1,15 @@
 import axios from "axios";
 
+function getApiBaseUrl() {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== "undefined" && window.location?.hostname === "carwash-crm-web.onrender.com") {
+    return "https://carwash-crm-api.onrender.com";
+  }
+  return "http://localhost:8000";
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  baseURL: getApiBaseUrl(),
   headers: { "Content-Type": "application/json" },
 });
 
