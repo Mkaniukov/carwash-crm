@@ -1,0 +1,40 @@
+# Render Blueprint: Carwash CRM
+# https://render.com/docs/blueprint-spec
+services:
+  # Backend API
+  - type: web
+    name: carwash-crm-api
+    runtime: python
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: carwash-crm-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+    healthCheckPath: /
+
+  # Frontend (Static Site)
+  - type: web
+    name: carwash-crm-web
+    runtime: static
+    region: frankfurt
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+
+databases:
+  - name: carwash-crm-db
+    region: frankfurt
+    plan: free
