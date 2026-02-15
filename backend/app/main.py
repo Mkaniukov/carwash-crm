@@ -23,7 +23,11 @@ from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
 # 🔹 CORS (localhost + Render frontend URL)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").strip().split(",")
+# По умолчанию в production добавляем фронт на Render, чтобы логин и сервисы работали без ручного CORS_ORIGINS
+_default_cors = "http://localhost:5173"
+if os.getenv("DATABASE_URL", "").startswith("postgres"):
+    _default_cors = "http://localhost:5173,https://carwash-crm-web.onrender.com"
+_cors_origins = os.getenv("CORS_ORIGINS", _default_cors).strip().split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
