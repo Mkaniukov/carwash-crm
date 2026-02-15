@@ -80,3 +80,27 @@ def create_default_settings():
             db.commit()
     finally:
         db.close()
+
+
+# Сервисы по умолчанию (если БД пустая — например после деплоя на Render)
+DEFAULT_SERVICES = [
+    {"name": "CAR SPA®", "price": 24, "duration": 30, "description": "Schnelle, günstige und schonende textile Außenwäsche. Manuelle Vorreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelles Trocknen."},
+    {"name": "CAR SOFT", "price": 36, "duration": 30, "description": "Intensive, schonende textile Außenwäsche mit Felgenreinigung extra. Manuelle Vorreinigung – händische Felgenreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelle Trocknung & zusätzliche manuelle Nachtrocknung."},
+    {"name": "CAR EASY", "price": 74, "duration": 90, "description": "Einfache Außen- und Innenreinigung (ohne Kofferraum oder Ladefläche). Manuelle Vorreinigung – händische Felgenreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelle Trocknung & zusätzliche manuelle Nachtrocknung – Reinigung von Fußmatten, Innenflächen (nur glatte Flächen) und Armaturen – Saugen von Teppichen, Sitzen, Seitenverkleidungen – Reinigung von Scheiben und Spiegeln – fachgerechte Endkontrolle."},
+    {"name": "CAR WELLNESS", "price": 86, "duration": 120, "description": "Intensive Außen- und Innenreinigung (mit Kofferraum oder Ladefläche). Manuelle Vorreinigung – händische Felgenreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelle Trocknung & zusätzliche manuelle Nachtrocknung – Reinigung von Fußmatten, Innenflächen (nur glatte Flächen) und Armaturen – Saugen von Teppichen, Sitzen, Seitenverkleidungen – Reinigung von Scheiben und Spiegeln – fachgerechte Endkontrolle."},
+    {"name": "CAR INTENSE (Innen)", "price": 68, "duration": 90, "description": "Intensive Innenreinigung (mit Kofferraum oder Ladefläche). Reinigung von Fußmatten, Innenflächen (nur glatte Flächen) und Armaturen – Saugen von Teppichen, Sitzen, Seitenverkleidungen – Reinigung von Scheiben und Spiegeln – fachgerechte Endkontrolle."},
+]
+
+
+@app.on_event("startup")
+def seed_default_services():
+    db = SessionLocal()
+    try:
+        if db.query(Service).first() is not None:
+            return
+        for d in DEFAULT_SERVICES:
+            db.add(Service(name=d["name"], price=d["price"], duration=d["duration"], description=d.get("description") or ""))
+        db.commit()
+        print("Default services seeded")
+    finally:
+        db.close()
