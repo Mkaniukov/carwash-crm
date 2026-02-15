@@ -2,7 +2,7 @@ import axios from "axios";
 
 function getApiBaseUrl() {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (typeof window !== "undefined" && window.location?.hostname === "carwash-crm-web.onrender.com") {
+  if (typeof window !== "undefined" && window.location?.hostname?.endsWith(".onrender.com")) {
     return "https://carwash-crm-api.onrender.com";
   }
   return "http://localhost:8000";

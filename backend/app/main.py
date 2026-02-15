@@ -1,8 +1,12 @@
 import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import time
 from app.core.security import hash_password
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 # 🔹 Создаём приложение
 app = FastAPI(title="Carwash CRM")
@@ -22,15 +26,13 @@ from app.routers.owner import router as owner_router
 from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
-# 🔹 CORS (localhost + Render frontend URL)
-# По умолчанию в production добавляем фронт на Render, чтобы логин и сервисы работали без ручного CORS_ORIGINS
-_default_cors = "http://localhost:5173"
-if os.getenv("DATABASE_URL", "").startswith("postgres"):
-    _default_cors = "http://localhost:5173,https://carwash-crm-web.onrender.com"
-_cors_origins = os.getenv("CORS_ORIGINS", _default_cors).strip().split(",")
+# 🔹 CORS (localhost + любой фронт на Render)
+# В production разрешаем любой origin на *.onrender.com (поддомен может отличаться)
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").strip().split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in _cors_origins if o.strip()],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com" if os.getenv("DATABASE_URL", "").startswith("postgres") else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,13 +53,30 @@ def root():
     return {"status": "CRM backend running"}
 
 
+# 🔹 Диагностика для деплоя (owner/services созданы?)
+@app.get("/public/health")
+def health_check():
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        owner = db.query(User).filter(User.username == "owner").first()
+        services_count = db.query(Service).count()
+        return {
+            "status": "ok",
+            "owner_exists": owner is not None,
+            "services_count": services_count,
+        }
+    finally:
+        db.close()
+
+
 # 🔹 Создание первого OWNER при старте
 @app.on_event("startup")
 def create_owner():
+    log.info("Startup: create_owner running")
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.username == "owner").first()
-
         if not existing:
             user = User(
                 username="owner",
@@ -66,12 +85,18 @@ def create_owner():
             )
             db.add(user)
             db.commit()
-            print("Owner created")
+            log.info("Owner created (login: owner / admin123)")
+        else:
+            log.info("Owner already exists")
+    except Exception as e:
+        log.exception("Owner creation failed: %s", e)
     finally:
         db.close()
 
+
 @app.on_event("startup")
 def create_default_settings():
+    log.info("Startup: create_default_settings running")
     db = SessionLocal()
     try:
         existing = db.query(BusinessSettings).first()
@@ -82,6 +107,11 @@ def create_default_settings():
             )
             db.add(settings)
             db.commit()
+            log.info("Default settings created")
+        else:
+            log.info("Settings already exist")
+    except Exception as e:
+        log.exception("Settings creation failed: %s", e)
     finally:
         db.close()
 
@@ -98,13 +128,17 @@ DEFAULT_SERVICES = [
 
 @app.on_event("startup")
 def seed_default_services():
+    log.info("Startup: seed_default_services running")
     db = SessionLocal()
     try:
         if db.query(Service).first() is not None:
+            log.info("Services already exist, skip seed")
             return
         for d in DEFAULT_SERVICES:
             db.add(Service(name=d["name"], price=d["price"], duration=d["duration"], description=d.get("description") or ""))
         db.commit()
-        print("Default services seeded")
+        log.info("Default services seeded (%d items)", len(DEFAULT_SERVICES))
+    except Exception as e:
+        log.exception("Seed services failed: %s", e)
     finally:
         db.close()
