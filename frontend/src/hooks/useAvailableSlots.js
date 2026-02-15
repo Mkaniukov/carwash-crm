@@ -42,7 +42,7 @@ export function useAvailableSlots(date, service) {
     publicApi
       .getBookingsByDate(d)
       .then((data) => {
-        if (!cancelled) setBookings(data);
+        if (!cancelled) setBookings(Array.isArray(data) ? data : []);
       })
       .catch(() => {
         if (!cancelled) setBookings([]);

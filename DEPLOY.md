@@ -55,6 +55,18 @@ git push -u origin main
 - В **carwash-crm-api** в **Environment** добавьте/измените `CORS_ORIGINS` на этот URL.
 - Сохраните и при необходимости передеплойте API.
 
+### Обязательно: SPA Rewrite (чтобы работали /login и другие страницы)
+
+Без этого при прямом заходе на https://carwash-crm-web.onrender.com/login будет **Not Found**.
+
+1. В **Dashboard** откройте сервис **carwash-crm-web** (Static Site).
+2. Слева выберите **Redirects/Rewrites**.
+3. Нажмите **Add Rule** и задайте:
+   - **Source Path:** `/*`
+   - **Destination Path:** `/index.html`
+   - **Action:** **Rewrite** (не Redirect).
+4. Сохраните. После этого `/login`, `/owner` и т.д. будут открываться.
+
 ---
 
 ## 3. Без Blueprint (ручная настройка)
@@ -87,3 +99,4 @@ git push -u origin main
 
 - Логин владельца: **owner** / **admin123** (смените пароль в настройках).
 - На Render Free план сервисы «засыпают» после неактивности; первый запрос может идти 30–60 секунд.
+- Если **нет сервисов** на главной: сделайте **Manual Deploy** у **carwash-crm-api** (бэкенд при старте создаёт сервисы, если БД пустая).

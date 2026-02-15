@@ -27,7 +27,7 @@ export default function BookingPage() {
   useEffect(() => {
     publicApi
       .getServices()
-      .then(setServices)
+      .then((data) => setServices(Array.isArray(data) ? data : []))
       .catch(() => setServices([]))
       .finally(() => setLoadingServices(false));
   }, []);

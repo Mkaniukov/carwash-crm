@@ -2,8 +2,9 @@ import { useState } from "react";
 
 export default function ServiceStep({ services, selected, onSelect }) {
   const [expandedId, setExpandedId] = useState(null);
+  const list = Array.isArray(services) ? services : [];
 
-  if (!services?.length) {
+  if (!list.length) {
     return (
       <div className="booking-empty">
         <p>Keine Services verfügbar.</p>
@@ -15,7 +16,7 @@ export default function ServiceStep({ services, selected, onSelect }) {
     <div className="booking-step">
       <h2 className="booking-step__title">Wählen Sie einen Service</h2>
       <div className="service-grid" role="listbox" aria-label="Services">
-        {services.map((s) => {
+        {list.map((s) => {
           const isExpanded = expandedId === s.id;
           const hasDescription = s.description?.trim();
           return (
