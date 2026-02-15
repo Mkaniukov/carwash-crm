@@ -21,7 +21,12 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const { access_token } = await authApi.login(username.trim(), password);
+      const data = await authApi.login(username.trim(), password);
+      const access_token = data?.access_token ?? data?.token;
+      if (!access_token || typeof access_token !== "string") {
+        toast.error("Anmeldung fehlgeschlagen. Ungültige Antwort vom Server.");
+        return;
+      }
       login(access_token);
       const payload = JSON.parse(atob(access_token.split(".")[1]));
       if (payload.role === "owner") navigate("/owner");

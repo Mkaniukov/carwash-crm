@@ -44,7 +44,10 @@ export function toLocalISOString(date) {
 }
 
 export function combineDateAndTime(date, timeStr) {
-  const [h, m] = timeStr.split(":").map(Number);
+  if (!timeStr || typeof timeStr !== "string") return date;
+  const parts = timeStr.split(":");
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
   return new Date(
     date.getFullYear(),
     date.getMonth(),
@@ -56,8 +59,10 @@ export function combineDateAndTime(date, timeStr) {
 
 export function generateTimeSlots(startStr, endStr, intervalMinutes = 30) {
   const slots = [];
-  let [h, m] = startStr.slice(0, 5).split(":").map(Number);
-  const [endH, endM] = endStr.slice(0, 5).split(":").map(Number);
+  const start = (startStr && String(startStr).slice(0, 5)) || "09:00";
+  const end = (endStr && String(endStr).slice(0, 5)) || "18:00";
+  let [h, m] = start.split(":").map(Number);
+  const [endH, endM] = end.split(":").map(Number);
 
   while (h < endH || (h === endH && m < endM)) {
     slots.push(

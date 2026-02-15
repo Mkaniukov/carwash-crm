@@ -22,8 +22,8 @@ export default function Calendar({ role, serviceId, onSelectSlot }) {
 
   if (!settings) return null;
 
-  const workStart = settings.work_start.slice(0, 5);
-  const workEnd = settings.work_end.slice(0, 5);
+  const workStart = (settings.work_start && String(settings.work_start).slice(0, 5)) || "09:00";
+  const workEnd = (settings.work_end && String(settings.work_end).slice(0, 5)) || "18:00";
 
   const slots = generateSlots(workStart, workEnd, 30);
 
@@ -91,8 +91,10 @@ export default function Calendar({ role, serviceId, onSelectSlot }) {
 
 function generateSlots(start, end, interval) {
   const slots = [];
-  let [h, m] = start.split(":").map(Number);
-  const [endH, endM] = end.split(":").map(Number);
+  const s = (start && String(start).slice(0, 5)) || "09:00";
+  const e = (end && String(end).slice(0, 5)) || "18:00";
+  let [h, m] = s.split(":").map(Number);
+  const [endH, endM] = e.split(":").map(Number);
 
   while (h < endH || (h === endH && m < endM)) {
     slots.push(
@@ -109,7 +111,8 @@ function generateSlots(start, end, interval) {
 }
 
 function combine(date, time) {
-  const [h, m] = time.split(":").map(Number);
+  if (!time || typeof time !== "string") return date;
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
   return new Date(
     date.getFullYear(),
     date.getMonth(),

@@ -17,8 +17,11 @@ export default function Services() {
     setLoading(true);
     ownerApi
       .getServices()
-      .then(setServices)
-      .catch(() => toast.error("Services konnten nicht geladen werden."))
+      .then((data) => setServices(Array.isArray(data) ? data : []))
+      .catch(() => {
+        toast.error("Services konnten nicht geladen werden.");
+        setServices([]);
+      })
       .finally(() => setLoading(false));
   };
 

@@ -30,7 +30,10 @@ function WorkerCalendar({ services, onSlotSelect }) {
   }, [date]);
 
   const handleSlot = (timeStr) => {
-    const [h, m] = timeStr.split(":").map(Number);
+    if (!timeStr || typeof timeStr !== "string") return;
+    const parts = timeStr.split(":");
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m);
     onSlotSelect(d, serviceId);
   };
