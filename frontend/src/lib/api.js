@@ -1,6 +1,6 @@
 import axios from "axios";
 
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   if (typeof window !== "undefined" && window.location?.hostname?.endsWith(".onrender.com")) {
     return "https://carwash-crm-api.onrender.com";
@@ -13,7 +13,12 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+if (typeof window !== "undefined") {
+  console.log("[Carwash CRM] API:", getApiBaseUrl());
+}
+
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
