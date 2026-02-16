@@ -1,9 +1,14 @@
 import axios from "axios";
 
+const PRODUCTION_API = "https://carwash-crm-api.onrender.com";
+
 export function getApiBaseUrl() {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === "string" && (envUrl.startsWith("http://") || envUrl.startsWith("https://"))) {
+    return envUrl.trim();
+  }
   if (typeof window !== "undefined" && window.location?.hostname?.endsWith(".onrender.com")) {
-    return "https://carwash-crm-api.onrender.com";
+    return PRODUCTION_API;
   }
   return "http://localhost:8000";
 }
@@ -42,6 +47,7 @@ export const publicApi = {
   getBookingsByDate: (date) =>
     api.get("/public/bookings/by-date", { params: { date } }).then((r) => r.data),
   createBooking: (body) => api.post("/public/bookings", body).then((r) => r.data),
+  cancelByToken: (token) => api.get(`/public/cancel/${token}`).then((r) => r.data),
 };
 
 // Auth – backend uses OAuth2PasswordRequestForm: form body username + password
@@ -78,6 +84,8 @@ export const ownerApi = {
   getSettings: () => api.get("/owner/settings").then((r) => r.data),
   updateSettings: (params) =>
     api.patch("/owner/settings", null, { params }).then((r) => r.data),
+  changePassword: (current_password, new_password) =>
+    api.patch("/owner/me/password", { current_password, new_password }).then((r) => r.data),
 };
 
 // Worker

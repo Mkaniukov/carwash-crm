@@ -1,15 +1,18 @@
 import smtplib
+import logging
 from email.mime.text import MIMEText
 import os
 from dotenv import load_dotenv
 
-# Загружаем .env
 load_dotenv()
+
+log = logging.getLogger(__name__)
 
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
 MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
 MAIL_FROM = os.getenv("MAIL_FROM")
-DOMAIN = os.getenv("DOMAIN", "http://localhost:8000")
+# Ссылка «Termin stornieren» ведёт на фронт; в Render задать FRONTEND_URL = URL Static Site
+FRONTEND_URL = os.getenv("FRONTEND_URL", os.getenv("DOMAIN", "http://localhost:5173"))
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
@@ -17,7 +20,7 @@ SMTP_PORT = 587
 
 def send_email(to_email: str, subject: str, body: str):
     if not MAIL_USERNAME or not MAIL_PASSWORD:
-        print("SMTP credentials missing")
+        log.warning("E-Mail nicht versendet: SMTP nicht konfiguriert (MAIL_USERNAME/MAIL_PASSWORD fehlen)")
         return
 
     msg = MIMEText(body)
@@ -31,14 +34,14 @@ def send_email(to_email: str, subject: str, body: str):
             server.login(MAIL_USERNAME, MAIL_PASSWORD.replace(" ", ""))
             server.sendmail(MAIL_FROM, to_email, msg.as_string())
     except Exception as e:
-        print("Email sending failed:", e)
+        log.exception("E-Mail-Versand fehlgeschlagen: %s", e)
 
 
 def send_booking_confirmation(booking):
     if not booking.email:
         return
 
-    cancel_link = f"{DOMAIN}/public/cancel/{booking.cancel_token}"
+    cancel_link = f"{FRONTEND_URL.rstrip('/')}/cancel/{booking.cancel_token}"
 
     formatted_date = booking.start_time.strftime("%d.%m.%Y")
     formatted_time = booking.start_time.strftime("%H:%M")

@@ -8,6 +8,12 @@ from app.core.security import hash_password
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+# 🔹 Проверка SECRET_KEY в production
+if os.getenv("DATABASE_URL", "").startswith("postgres"):
+    sk = os.getenv("SECRET_KEY", "")
+    if not sk or sk == "supersecretkey":
+        log.warning("SECRET_KEY is default or missing in production. Set SECRET_KEY in Render Environment.")
+
 # 🔹 Создаём приложение
 app = FastAPI(title="Carwash CRM")
 

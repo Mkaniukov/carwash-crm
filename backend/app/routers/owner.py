@@ -9,7 +9,7 @@ import io
 import pandas as pd
 
 from app.db.session import get_db
-from app.core.security import require_role, hash_password
+from app.core.security import require_role, hash_password, verify_password
 from app.models.user import User
 from app.models.service import Service
 from app.models.booking import Booking, BookingSource
@@ -44,6 +44,29 @@ def owner_dashboard(current_user: User = Depends(require_role("owner"))):
         "message": f"Welcome, {current_user.username}",
         "role": current_user.role
     }
+
+
+# =====================================================
+# CHANGE PASSWORD (owner)
+# =====================================================
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.patch("/me/password")
+def owner_change_password(
+    body: ChangePasswordBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner"))
+):
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is wrong")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"message": "Password updated"}
 
 
 # =====================================================

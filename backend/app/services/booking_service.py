@@ -30,6 +30,9 @@ def create_booking_logic(
     if start_time.tzinfo is not None:
         start_time = start_time.replace(tzinfo=None)
 
+    if start_time < datetime.utcnow() - timedelta(minutes=2):
+        raise HTTPException(status_code=400, detail="Start time must be in the future")
+
     # рассчитываем окончание
     end_time = start_time + timedelta(minutes=service.duration)
 

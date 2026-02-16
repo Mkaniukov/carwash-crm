@@ -52,6 +52,7 @@ export default function ConfirmStep({
         onClick={onConfirm}
         loading={loading}
         size="lg"
+        aria-label="Termin verbindlich buchen"
       >
         Termin buchen
       </Button>

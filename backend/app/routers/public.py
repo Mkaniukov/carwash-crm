@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from app.services.email_service import (
     send_booking_confirmation,
     send_cancellation_email
 )
+from app.core.rate_limit import check_booking_rate_limit
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -51,10 +52,12 @@ def list_public_services(db: Session = Depends(get_db)):
 # =====================================================
 @router.post("/bookings")
 def create_public_booking(
+    request: Request,
     data: PublicBookingRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
+    check_booking_rate_limit(request)
     booking = create_booking_logic(
         db=db,
         client_name=data.client_name,

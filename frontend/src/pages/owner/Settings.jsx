@@ -27,6 +27,10 @@ export default function Settings() {
   const [workStart, setWorkStart] = useState("09:00");
   const [workEnd, setWorkEnd] = useState("18:00");
   const [workingDays, setWorkingDays] = useState(["0", "1", "2", "3", "4"]);
+  const [passwordCurrent, setPasswordCurrent] = useState("");
+  const [passwordNew, setPasswordNew] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   useEffect(() => {
     ownerApi
@@ -63,6 +67,30 @@ export default function Settings() {
       toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e?.preventDefault();
+    if (passwordNew !== passwordConfirm) {
+      toast.error("Neues Passwort und Bestätigung stimmen nicht überein.");
+      return;
+    }
+    if (passwordNew.length < 6) {
+      toast.error("Neues Passwort muss mindestens 6 Zeichen haben.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await ownerApi.changePassword(passwordCurrent, passwordNew);
+      toast.success("Passwort geändert.");
+      setPasswordCurrent("");
+      setPasswordNew("");
+      setPasswordConfirm("");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Passwortänderung fehlgeschlagen."));
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -114,6 +142,45 @@ export default function Settings() {
 
           <div className="settings-form__actions">
             <Button type="submit" loading={saving}>Speichern</Button>
+          </div>
+        </form>
+      </Card>
+
+      <Card className="settings-form__card">
+        <h3 className="settings-form__section">Passwort ändern</h3>
+        <p className="settings-form__hint">Ändern Sie Ihr Anmeldepasswort. Empfohlen nach dem ersten Login (Standard: admin123).</p>
+        <form onSubmit={handlePasswordSubmit} className="settings-form">
+          <Input
+            label="Aktuelles Passwort"
+            type="password"
+            value={passwordCurrent}
+            onChange={(e) => setPasswordCurrent(e.target.value)}
+            required
+            disabled={passwordSaving}
+            autoComplete="current-password"
+          />
+          <Input
+            label="Neues Passwort (min. 6 Zeichen)"
+            type="password"
+            value={passwordNew}
+            onChange={(e) => setPasswordNew(e.target.value)}
+            required
+            disabled={passwordSaving}
+            autoComplete="new-password"
+          />
+          <Input
+            label="Neues Passwort bestätigen"
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            required
+            disabled={passwordSaving}
+            autoComplete="new-password"
+          />
+          <div className="settings-form__actions">
+            <Button type="submit" loading={passwordSaving} disabled={passwordSaving}>
+              Passwort ändern
+            </Button>
           </div>
         </form>
       </Card>

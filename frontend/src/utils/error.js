@@ -10,6 +10,9 @@ export function getErrorMessage(err, fallback = "Ein Fehler ist aufgetreten.") {
   if (!err.response && (err.code === "ERR_NETWORK" || err.request)) {
     return "Server nicht erreichbar. Bitte in 30–60 Sekunden erneut versuchen (erster Aufruf kann dauern).";
   }
+  if (err.response?.status === 429) {
+    return "Zu viele Anfragen. Bitte etwas warten und erneut versuchen.";
+  }
   const detail = err.response?.data?.detail;
   if (detail == null) {
     const msg = err.message || err.response?.data?.message;

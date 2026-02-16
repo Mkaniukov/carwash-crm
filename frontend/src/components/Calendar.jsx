@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api/axios";
+import { publicApi } from "../lib/api";
 
 export default function Calendar({ role, serviceId, onSelectSlot }) {
   const [date, setDate] = useState(new Date());
@@ -7,17 +7,16 @@ export default function Calendar({ role, serviceId, onSelectSlot }) {
   const [bookings, setBookings] = useState([]);
 
   useEffect(() => {
-    api.get("/public/settings").then(res => setSettings(res.data));
+    publicApi.getSettings().then(setSettings).catch(() => setSettings(null));
   }, []);
 
   useEffect(() => {
     if (!settings) return;
-
     const formatted = formatDate(date);
-
-    api
-      .get(`/public/bookings/by-date?date=${formatted}`)
-      .then(res => setBookings(res.data));
+    publicApi
+      .getBookingsByDate(formatted)
+      .then((data) => setBookings(Array.isArray(data) ? data : []))
+      .catch(() => setBookings([]));
   }, [date, settings]);
 
   if (!settings) return null;

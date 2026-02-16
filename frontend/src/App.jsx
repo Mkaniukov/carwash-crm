@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 
 import BookingPage from "./pages/public/BookingPage";
 import SuccessPage from "./pages/public/SuccessPage";
+import CancelPage from "./pages/public/CancelPage";
 import Login from "./pages/Login";
 
 import Dashboard from "./pages/owner/Dashboard";
@@ -25,6 +26,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<BookingPage />} />
             <Route path="/success" element={<SuccessPage />} />
+            <Route path="/cancel/:token" element={<CancelPage />} />
             <Route path="/login" element={<Login />} />
 
             <Route

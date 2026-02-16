@@ -42,11 +42,12 @@ git push -u origin main
    - **Static Site** (frontend)
 5. Перед **Apply** задайте переменные:
    - Для **carwash-crm-api** (backend):
-     - `CORS_ORIGINS` = `https://carwash-crm-web.onrender.com`  
-       (подставьте свой URL статического сайта после первого деплоя, например из вкладки сервиса frontend).
+     - `SECRET_KEY` — длинная случайная строка (в Render: Generate).
+     - `CORS_ORIGINS` = `https://carwash-crm-web.onrender.com` (опционально; для *.onrender.com уже разрешено).
+     - `FRONTEND_URL` = `https://carwash-crm-web.onrender.com` — URL фронта; по нему в E-Mails строится ссылка «Termin stornieren».
+     - Для E-Mails (Bestätigung/Storno): `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (z. B. Gmail-App-Passwort).
    - Для **carwash-crm-web** (frontend):
-     - `VITE_API_URL` = `https://carwash-crm-api.onrender.com`  
-       (URL вашего backend на Render).
+     - `VITE_API_URL` = `https://carwash-crm-api.onrender.com` (URL вашего backend; muss mit `http://` oder `https://` beginnen).
 6. Нажмите **Apply** и дождитесь деплоя.
 
 После первого деплоя:
@@ -97,6 +98,7 @@ git push -u origin main
 
 ## 4. После деплоя
 
-- Логин владельца: **owner** / **admin123** (смените пароль в настройках).
-- На Render Free план сервисы «засыпают» после неактивности; первый запрос может идти 30–60 секунд.
-- Если **нет сервисов** на главной: сделайте **Manual Deploy** у **carwash-crm-api** (бэкенд при старте создаёт сервисы, если БД пустая).
+- Логин владельца: **owner** / **admin123** — **смените пароль** in Einstellungen → Passwort ändern.
+- Ссылка «Termin stornieren» в E-Mails ведёт на `FRONTEND_URL/cancel/TOKEN` (Seite «Termin storniert»).
+- На Render Free план сервисы «засыпают» после неактивности; первый запрос может идти 30–60 Sekunden.
+- Wenn **keine Services** auf der Startseite: **Manual Deploy** bei **carwash-crm-api** ausführen (Backend seedet beim Start, wenn DB leer).

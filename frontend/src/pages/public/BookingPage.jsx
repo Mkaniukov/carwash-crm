@@ -24,13 +24,16 @@ export default function BookingPage() {
   const { date, service, time, details, selectedDateTime } = booking;
   const { settings, slots, loading: slotsLoading } = useAvailableSlots(date, service);
 
-  useEffect(() => {
+  const loadServices = useCallback(() => {
+    setLoadingServices(true);
     publicApi
       .getServices()
       .then((data) => setServices(Array.isArray(data) ? data : []))
       .catch(() => setServices([]))
       .finally(() => setLoadingServices(false));
   }, []);
+
+  useEffect(() => loadServices(), [loadServices]);
 
   const handleConfirm = useCallback(async () => {
     if (!service || !selectedDateTime || !details.name || !details.phone || !details.email) return;
@@ -74,7 +77,28 @@ export default function BookingPage() {
         <div className="booking-page__inner">
           <div className="booking-page__logo">Carwash</div>
           <div className="card card--padding">
-            <p style={{ margin: 0, color: "var(--color-text-muted)" }}>Lade Services…</p>
+            <p style={{ margin: 0, color: "var(--color-text-muted)" }}>Services werden geladen…</p>
+            <p className="text-muted" style={{ marginTop: 8, fontSize: "0.9rem" }}>
+              Bei der ersten Anfrage kann es bis zu einer Minute dauern.
+            </p>
+          </div>
+        </div>
+        <Toaster position="top center" />
+      </div>
+    );
+  }
+
+  if (!services.length) {
+    return (
+      <div className="booking-page">
+        <div className="booking-page__inner">
+          <div className="booking-page__logo">Carwash</div>
+          <div className="card card--padding">
+            <p style={{ margin: 0 }}>Services konnten nicht geladen werden.</p>
+            <p className="text-muted" style={{ marginTop: 8 }}>Antwort dauert länger oder Server nicht erreichbar.</p>
+            <Button className="booking-page__retry" onClick={loadServices} aria-label="Services erneut laden">
+              Erneut versuchen
+            </Button>
           </div>
         </div>
         <Toaster position="top center" />
@@ -149,7 +173,7 @@ export default function BookingPage() {
 
         {booking.canGoBack && booking.stepName !== "confirm" && (
           <div className="booking-nav">
-            <Button variant="ghost" onClick={booking.goBack}>
+            <Button variant="ghost" onClick={booking.goBack} aria-label="Schritt zurück">
               ← Zurück
             </Button>
           </div>
