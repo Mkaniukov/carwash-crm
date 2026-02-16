@@ -76,24 +76,32 @@ def health_check():
         db.close()
 
 
-# 🔹 Создание первого OWNER при старте
+# 🔹 Создание первого OWNER при старте (пароль из OWNER_INITIAL_PASSWORD)
 @app.on_event("startup")
 def create_owner():
     log.info("Startup: create_owner running")
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.username == "owner").first()
-        if not existing:
-            user = User(
-                username="owner",
-                password_hash=hash_password("admin123"),
-                role="owner"
-            )
-            db.add(user)
-            db.commit()
-            log.info("Owner created (login: owner / admin123)")
-        else:
+        if existing:
             log.info("Owner already exists")
+            return
+        # Production (PostgreSQL): пароль только из env. Локально (SQLite): по умолчанию admin123
+        is_production = os.getenv("DATABASE_URL", "").startswith("postgres")
+        password = os.getenv("OWNER_INITIAL_PASSWORD", "").strip()
+        if is_production and not password:
+            log.warning("OWNER_INITIAL_PASSWORD not set. Set it in Render Environment to create initial owner.")
+            return
+        if not password:
+            password = "admin123"
+        user = User(
+            username="owner",
+            password_hash=hash_password(password),
+            role="owner"
+        )
+        db.add(user)
+        db.commit()
+        log.info("Owner created (username: owner). Change password in Einstellungen after first login.")
     except Exception as e:
         log.exception("Owner creation failed: %s", e)
     finally:

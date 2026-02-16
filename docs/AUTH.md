@@ -20,9 +20,10 @@ The backend uses FastAPI’s `OAuth2PasswordRequestForm`, so it expects **form f
 **Example (curl):**
 
 ```bash
+# Use the password you set in OWNER_INITIAL_PASSWORD (production) or admin123 (local default)
 curl -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=owner&password=admin123"
+  -d "username=owner&password=YOUR_PASSWORD"
 ```
 
 **Success response (200):**
@@ -46,16 +47,14 @@ The frontend uses this to redirect: **owner** → `/owner`, **worker** → `/wor
 
 ## 2. Seeded users
 
-On **first backend startup**, the app creates one default user:
+On **first backend startup**, the app creates one default user if missing:
 
-| Username | Password   | Role   |
-|----------|------------|--------|
-| `owner`  | `admin123` | owner  |
+| Username | Password | Role   |
+|----------|----------|--------|
+| `owner`  | From **OWNER_INITIAL_PASSWORD** (production) or `admin123` (local) | owner  |
 
-So you can log in immediately with:
-
-- **Username:** `owner`
-- **Password:** `admin123`
+- **Production (PostgreSQL):** Set **OWNER_INITIAL_PASSWORD** in Render Environment; the initial owner is created with that password. It is not stored in code.
+- **Local (SQLite):** If the env var is not set, the default is `admin123` for development only.
 
 There is **no seeded worker**. Create one as described below (as owner or via script).
 
@@ -74,7 +73,7 @@ There is **no seeded worker**. Create one as described below (as owner or via sc
 
 ### Option A: Use the seeded owner, create a worker via Owner API
 
-1. Log in as **owner** / **admin123** (see section 2).
+1. Log in as **owner** with the password from OWNER_INITIAL_PASSWORD (or local default, see section 2).
 2. Create a worker using the **Owner** API (you must be authenticated as owner):
 
 **Endpoint:** `POST /owner/users`  
@@ -119,8 +118,8 @@ python -m scripts.create_users
 
 This will:
 
-- Create user **owner** / **admin123** (role `owner`) if missing.
-- Create user **worker1** / **worker123** (role `worker`) if missing.
+- Create user **owner** (role `owner`) with password from **OWNER_INITIAL_PASSWORD** env or default `admin123` (local) if missing.
+- Create user **worker1** (role `worker`) with password from **WORKER1_PASSWORD** env or `worker123` if missing.
 
 You can edit the script to change usernames/passwords or add more users. **Do not change backend logic**; only use this to insert users that match the existing `User` model and security (e.g. `hash_password`).
 
@@ -152,8 +151,8 @@ Creating users by hand is only practical if you generate a valid `password_hash`
 
 | Question                         | Answer                                                                 |
 |----------------------------------|-----------------------------------------------------------------------|
-| Seeded users?                    | Yes: **owner** / **admin123** (owner).                                |
-| How to create first owner?      | Start the backend (creates owner once) or run `scripts/create_users.py`. |
+| Seeded users?                    | Yes: **owner** (password from OWNER_INITIAL_PASSWORD in prod, or admin123 local). |
+| How to create first owner?      | Start the backend with OWNER_INITIAL_PASSWORD set (prod) or run `scripts/create_users.py`. |
 | How to create first worker?     | Log in as owner → call `POST /owner/users?username=...&password=...` or run the script. |
 | Register endpoint?              | No.                                                                   |
 | Expected login body?            | Form: `username=...&password=...` (not JSON with email).              |

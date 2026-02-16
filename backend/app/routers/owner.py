@@ -6,7 +6,8 @@ from datetime import datetime, time, timedelta
 from pydantic import BaseModel
 from typing import Optional
 import io
-import pandas as pd
+
+from openpyxl import Workbook
 
 from app.db.session import get_db
 from app.core.security import require_role, hash_password, verify_password
@@ -493,23 +494,29 @@ def export_bookings(
         Booking.start_time <= end_date
     ).all()
 
-    data = [
-        {
-            "Datum": b.start_time.strftime("%d.%m.%Y"),
-            "Uhrzeit": b.start_time.strftime("%H:%M"),
-            "Kunde": b.client_name,
-            "Telefon": b.phone,
-            "Dienstleistung": b.service.name if b.service else "",
-            "Preis (€)": b.service_price,
-            "Quelle": b.source
-        }
+    headers = ["Datum", "Uhrzeit", "Kunde", "Telefon", "Dienstleistung", "Preis (€)", "Quelle"]
+    rows = [
+        [
+            b.start_time.strftime("%d.%m.%Y"),
+            b.start_time.strftime("%H:%M"),
+            b.client_name,
+            b.phone,
+            b.service.name if b.service else "",
+            b.service_price,
+            b.source or "",
+        ]
         for b in bookings
     ]
 
-    df = pd.DataFrame(data)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Buchungen"
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
 
     output = io.BytesIO()
-    df.to_excel(output, index=False, engine="openpyxl")
+    wb.save(output)
     output.seek(0)
 
     filename = f"export_{start_date.date()}_{end_date.date()}.xlsx"

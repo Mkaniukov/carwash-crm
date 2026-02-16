@@ -148,7 +148,7 @@ export default function Settings() {
 
       <Card className="settings-form__card">
         <h3 className="settings-form__section">Passwort ändern</h3>
-        <p className="settings-form__hint">Ändern Sie Ihr Anmeldepasswort. Empfohlen nach dem ersten Login (Standard: admin123).</p>
+        <p className="settings-form__hint">Ändern Sie Ihr Anmeldepasswort. Empfohlen nach dem ersten Login.</p>
         <form onSubmit={handlePasswordSubmit} className="settings-form">
           <Input
             label="Aktuelles Passwort"

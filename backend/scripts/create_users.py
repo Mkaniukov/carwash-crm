@@ -1,11 +1,12 @@
 """
 One-time script to create owner and worker users.
-Uses the same DB and hash_password as the app. Run from backend dir: python -m scripts.create_users
+Password for owner: OWNER_INITIAL_PASSWORD env or default admin123 (local only).
+Run from backend dir: python -m scripts.create_users
 """
+import os
 import sys
 from pathlib import Path
 
-# Add app to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.session import SessionLocal
@@ -28,12 +29,13 @@ def ensure_user(db, username: str, password: str, role: str) -> None:
 
 
 def main():
+    owner_password = os.getenv("OWNER_INITIAL_PASSWORD", "").strip() or "admin123"
     db = SessionLocal()
     try:
-        ensure_user(db, "owner", "admin123", "owner")
-        ensure_user(db, "worker1", "worker123", "worker")
+        ensure_user(db, "owner", owner_password, "owner")
+        ensure_user(db, "worker1", os.getenv("WORKER1_PASSWORD", "worker123"), "worker")
         db.commit()
-        print("Done. You can log in with username 'owner' / 'admin123' or 'worker1' / 'worker123'.")
+        print("Done. Log in as owner (password from OWNER_INITIAL_PASSWORD or set in Einstellungen).")
     finally:
         db.close()
 
