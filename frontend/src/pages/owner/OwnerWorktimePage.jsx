@@ -3,8 +3,19 @@ import { format, subMonths, addMonths } from "date-fns";
 import { de } from "date-fns/locale";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
-import { Card } from "../../components/ui";
+import { Card, Button, Modal, Input } from "../../components/ui";
 import { ownerApi } from "../../lib/api";
+import { getErrorMessage } from "../../utils/error";
+
+function toTimeStr(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return format(d, "HH:mm");
+}
+function toISO(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  return `${dateStr}T${timeStr}:00`;
+}
 
 export default function OwnerWorktimePage() {
   const [entries, setEntries] = useState([]);
@@ -12,6 +23,9 @@ export default function OwnerWorktimePage() {
   const [loading, setLoading] = useState(true);
   const [workerId, setWorkerId] = useState("");
   const [month, setMonth] = useState(() => new Date());
+  const [editEntry, setEditEntry] = useState(null);
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", pause_minutes: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     ownerApi.getWorkers().then((w) => setWorkers(Array.isArray(w) ? w : [])).catch(() => setWorkers([]));
@@ -30,6 +44,44 @@ export default function OwnerWorktimePage() {
       })
       .finally(() => setLoading(false));
   }, [month, workerId]);
+
+  const openEdit = (e) => {
+    setEditEntry(e);
+    setEditForm({
+      start_time: toTimeStr(e.start_time),
+      end_time: toTimeStr(e.end_time),
+      pause_minutes: String(e.pause_minutes ?? 0),
+    });
+  };
+
+  const submitEdit = async () => {
+    if (!editEntry) return;
+    const start = toISO(editEntry.date, editForm.start_time);
+    const end = editForm.end_time ? toISO(editEntry.date, editForm.end_time) : "";
+    const pause = parseInt(editForm.pause_minutes, 10);
+    if (!start) {
+      toast.error("Beginn eingeben.");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await ownerApi.updateWorktime(editEntry.id, {
+        start_time: start,
+        end_time: end || undefined,
+        pause_minutes: Number.isNaN(pause) ? undefined : pause,
+      });
+      toast.success("Eintrag aktualisiert.");
+      setEditEntry(null);
+      setLoading(true);
+      const params = { year: month.getFullYear(), month: month.getMonth() + 1 };
+      if (workerId) params.worker_id = workerId;
+      ownerApi.getWorktime(params).then((data) => setEntries(Array.isArray(data) ? data : [])).finally(() => setLoading(false));
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   return (
     <Layout role="owner">
@@ -89,6 +141,7 @@ export default function OwnerWorktimePage() {
                 <th>Ende</th>
                 <th>Pause (Min)</th>
                 <th>Stunden</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -100,12 +153,52 @@ export default function OwnerWorktimePage() {
                   <td>{e.end_time ? format(new Date(e.end_time), "HH:mm") : "—"}</td>
                   <td>{e.pause_minutes ?? 0}</td>
                   <td>{e.total_hours != null ? `${e.total_hours} h` : "—"}</td>
+                  <td>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(e)}>Bearbeiten</Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Card>
       )}
+
+      <Modal
+        open={!!editEntry}
+        onClose={() => setEditEntry(null)}
+        title="Arbeitszeit bearbeiten"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditEntry(null)}>Abbrechen</Button>
+            <Button loading={editSaving} onClick={submitEdit}>Speichern</Button>
+          </>
+        }
+      >
+        {editEntry && (
+          <div className="checkin-form__row">
+            <Input
+              label="Beginn (HH:mm)"
+              value={editForm.start_time}
+              onChange={(e) => setEditForm((f) => ({ ...f, start_time: e.target.value }))}
+              placeholder="09:00"
+            />
+            <Input
+              label="Ende (HH:mm, leer = offen)"
+              value={editForm.end_time}
+              onChange={(e) => setEditForm((f) => ({ ...f, end_time: e.target.value }))}
+              placeholder="17:00"
+            />
+            <Input
+              label="Pause (Minuten)"
+              type="number"
+              min="0"
+              max="480"
+              value={editForm.pause_minutes}
+              onChange={(e) => setEditForm((f) => ({ ...f, pause_minutes: e.target.value }))}
+            />
+          </div>
+        )}
+      </Modal>
     </Layout>
   );
 }

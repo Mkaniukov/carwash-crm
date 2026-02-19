@@ -7,8 +7,11 @@ from app.db.session import Base
 
 
 class BookingStatus(str, enum.Enum):
-    confirmed = "confirmed"
-    completed = "completed"
+    booked = "booked"                    # после создания
+    checked_in = "checked_in"            # после подписания формуляра
+    paid = "paid"                        # после оплаты
+    confirmed = "confirmed"              # legacy, трактуем как booked
+    completed = "completed"              # legacy, трактуем как paid
     canceled_by_client = "canceled_by_client"
     canceled_by_staff = "canceled_by_staff"
     no_show = "no_show"
@@ -35,7 +38,7 @@ class Booking(Base):
     start_time = Column(DateTime, nullable=False, index=True)
     end_time = Column(DateTime, nullable=False, index=True)
 
-    status = Column(Enum(BookingStatus), default=BookingStatus.confirmed, nullable=False)
+    status = Column(Enum(BookingStatus), default=BookingStatus.booked, nullable=False)
     source = Column(Enum(BookingSource), default=BookingSource.website, nullable=False)
 
     cancel_token = Column(String, unique=True, index=True, nullable=True)

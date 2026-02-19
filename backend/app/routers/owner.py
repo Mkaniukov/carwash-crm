@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from datetime import datetime, time, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import io
 
@@ -338,11 +338,12 @@ def owner_reschedule_booking(
         raise HTTPException(status_code=400, detail="Closed on this day")
     if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
+    active_statuses = ("booked", "checked_in", "confirmed")
     overlap = (
         db.query(Booking)
         .filter(
             Booking.id != booking_id,
-            Booking.status == "confirmed",
+            Booking.status.in_(active_statuses),
             Booking.start_time < end_time,
             Booking.end_time > start_time,
         )
@@ -416,18 +417,19 @@ def owner_analytics(
     start_of_day = datetime(now.year, now.month, now.day)
     start_of_month = datetime(now.year, now.month, 1)
 
+    paid_statuses = ("paid", "completed")
     revenue_today = db.query(func.sum(Booking.service_price)).filter(
-        Booking.status == "completed",
+        Booking.status.in_(paid_statuses),
         Booking.start_time >= start_of_day
     ).scalar() or 0
 
     revenue_month = db.query(func.sum(Booking.service_price)).filter(
-        Booking.status == "completed",
+        Booking.status.in_(paid_statuses),
         Booking.start_time >= start_of_month
     ).scalar() or 0
 
     completed_count = db.query(func.count(Booking.id)).filter(
-        Booking.status == "completed"
+        Booking.status.in_(paid_statuses)
     ).scalar() or 0
 
     total_bookings = db.query(func.count(Booking.id)).scalar() or 0
@@ -443,7 +445,7 @@ def owner_analytics(
         Booking.source,
         func.sum(Booking.service_price)
     ).filter(
-        Booking.status == "completed"
+        Booking.status.in_(paid_statuses)
     ).group_by(Booking.source).all()
 
     source_data = {source: revenue or 0 for source, revenue in revenue_by_source}
@@ -452,7 +454,7 @@ def owner_analytics(
         User.username,
         func.sum(Booking.service_price)
     ).join(Booking, Booking.created_by == User.id).filter(
-        Booking.status == "completed"
+        Booking.status.in_(paid_statuses)
     ).group_by(User.username).all()
 
     worker_data = {username: revenue or 0 for username, revenue in revenue_by_worker}
@@ -490,7 +492,7 @@ def export_bookings(
     current_user: User = Depends(require_role("owner"))
 ):
     bookings = db.query(Booking).filter(
-        Booking.status == "completed",
+        Booking.status.in_(("paid", "completed")),
         Booking.start_time >= start_date,
         Booking.start_time <= end_date
     ).all()
@@ -532,6 +534,62 @@ def export_bookings(
 # =====================================================
 # WORK TIME (учёт рабочего времени по сотрудникам)
 # =====================================================
+class WorkTimeUpdateBody(BaseModel):
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    pause_minutes: Optional[int] = Field(None, ge=0, le=480)
+
+
+def _parse_dt(s: str | None):
+    if not s:
+        return None
+    from datetime import datetime
+    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+@router.put("/worktime/{time_id}")
+def owner_worktime_update(
+    time_id: int,
+    body: WorkTimeUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    """Владелец может редактировать любые записи. total_hours пересчитывается на backend."""
+    wt = db.query(WorkTime).filter(WorkTime.id == time_id).first()
+    if not wt:
+        raise HTTPException(status_code=404, detail="Work time record not found")
+    start = _parse_dt(body.start_time) if body.start_time else wt.start_time
+    if body.end_time is None:
+        end = wt.end_time
+    elif body.end_time.strip() == "":
+        end = None
+    else:
+        end = _parse_dt(body.end_time)
+    pause = body.pause_minutes if body.pause_minutes is not None else wt.pause_minutes
+    wt.start_time = start
+    wt.end_time = end
+    wt.pause_minutes = pause
+    if end is not None:
+        if end < start:
+            raise HTTPException(status_code=400, detail="end_time must be >= start_time")
+        delta = (end - start).total_seconds() / 3600 - (pause / 60)
+        wt.total_hours = round(max(0, delta), 2)
+    else:
+        wt.total_hours = None
+    db.commit()
+    db.refresh(wt)
+    return {
+        "id": wt.id,
+        "worker_id": wt.worker_id,
+        "date": wt.date.isoformat(),
+        "start_time": wt.start_time.isoformat(),
+        "end_time": wt.end_time.isoformat() if wt.end_time else None,
+        "pause_minutes": wt.pause_minutes,
+        "total_hours": float(wt.total_hours) if wt.total_hours is not None else None,
+    }
+
+
 @router.get("/worktime")
 def owner_worktime_list(
     worker_id: Optional[int] = Query(None),

@@ -127,7 +127,7 @@ def public_bookings_by_date(
     end_of_day = start_of_day + timedelta(days=1)
 
     bookings = db.query(Booking).filter(
-        Booking.status == "confirmed",
+        Booking.status.in_(("booked", "checked_in", "confirmed")),
         Booking.start_time >= start_of_day,
         Booking.start_time < end_of_day
     ).all()

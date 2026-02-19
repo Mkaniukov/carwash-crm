@@ -1,5 +1,5 @@
 """Модель формуляра цифровой приёмки автомобиля при закрытии заказа."""
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -12,8 +12,14 @@ class CheckInForm(Base):
     id = Column(Integer, primary_key=True, index=True)
     booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False, unique=True)
 
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)   # legacy rows may be NULL
+    car_size = Column(String(16), nullable=True)   # small | large
+    extra_glanz = Column(Boolean, default=False, nullable=False)
+    regie_price = Column(Numeric(10, 2), nullable=True)
+    final_price = Column(Numeric(10, 2), nullable=True)   # legacy rows may be NULL
+
     car_plate = Column(String(32), nullable=False)
-    payment_method = Column(String(16), nullable=False)  # cash | card
+    payment_method = Column(String(16), nullable=True)  # legacy; при оплате берётся из Payment
 
     visible_damage_notes = Column(Text, nullable=True)
     no_visible_damage = Column(Boolean, default=False, nullable=False)
@@ -27,4 +33,5 @@ class CheckInForm(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     booking = relationship("Booking", backref="checkin_form")
+    service = relationship("Service", foreign_keys=[service_id])
     completer = relationship("User")

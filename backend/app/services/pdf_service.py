@@ -6,10 +6,13 @@ from datetime import datetime
 log = logging.getLogger(__name__)
 
 
-def generate_checkin_pdf(db, booking, form) -> bytes | None:
+def generate_checkin_pdf(db, booking, form, payment_method: str | None = None, price: float | None = None) -> bytes | None:
     """Генерирует PDF с данными клиента, услуги, авто, оплаты, подписи, даты.
+    payment_method и price приходят из Payment после оплаты; иначе — из form/booking (legacy).
     Возвращает bytes или None при ошибке.
     """
+    pay_method = payment_method or (form.payment_method if hasattr(form, "payment_method") else "") or "—"
+    doc_price = price if price is not None else (float(form.final_price) if getattr(form, "final_price", None) is not None else booking.service_price)
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
@@ -37,9 +40,9 @@ def generate_checkin_pdf(db, booking, form) -> bytes | None:
     if booking.email:
         c.drawString(40, y, f"E-Mail: {booking.email}")
         y -= 14
-    c.drawString(40, y, f"Service: {booking.service.name if booking.service else '-'}  |  Preis: €{booking.service_price}")
+    c.drawString(40, y, f"Service: {booking.service.name if booking.service else '-'}  |  Preis: €{doc_price}")
     y -= 18
-    c.drawString(40, y, f"Kennzeichen: {form.car_plate}  |  Zahlung: {form.payment_method}")
+    c.drawString(40, y, f"Kennzeichen: {form.car_plate}  |  Zahlung: {pay_method}")
     y -= 18
     if form.visible_damage_notes:
         c.drawString(40, y, f"Sichtbare Schaden: {form.visible_damage_notes[:200]}")

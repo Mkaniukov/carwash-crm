@@ -5,7 +5,7 @@ import { de } from "date-fns/locale";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
 import { Card, Button, Input } from "../../components/ui";
-import { workerApi } from "../../lib/api";
+import { workerApi, publicApi } from "../../lib/api";
 import { getErrorMessage } from "../../utils/error";
 
 function SignaturePad({ value, onChange }) {
@@ -79,14 +79,18 @@ export default function CompleteBookingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     client_name: "",
     phone: "",
     email: "",
+    service_id: 0,
+    car_size: "small",
+    extra_glanz: false,
+    regie_price: "",
     car_plate: "",
-    payment_method: "cash",
     visible_damage_notes: "",
     no_visible_damage: false,
     internal_notes: "",
@@ -96,15 +100,19 @@ export default function CompleteBookingPage() {
 
   useEffect(() => {
     if (!id) return;
-    workerApi
-      .getBooking(Number(id))
-      .then((b) => {
+    Promise.all([
+      workerApi.getBooking(Number(id)),
+      publicApi.getServices().catch(() => []),
+    ])
+      .then(([b, s]) => {
         setBooking(b);
+        setServices(Array.isArray(s) ? s : []);
         setForm((f) => ({
           ...f,
           client_name: b.client_name || "",
           phone: b.phone || "",
           email: b.email || "",
+          service_id: b.service_id || 0,
         }));
       })
       .catch((err) => {
@@ -132,10 +140,26 @@ export default function CompleteBookingPage() {
     setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== index) }));
   };
 
+  const selectedService = services.find((s) => s.id === (form.service_id || booking?.service_id));
+  const previewPrice = (() => {
+    if (!selectedService) return null;
+    let p = selectedService.price || 0;
+    if (form.car_size === "large") p += 24;
+    if (form.extra_glanz) p += 9;
+    const regie = parseFloat(form.regie_price);
+    if (Number.isFinite(regie) && regie > 0) p += regie;
+    return p;
+  })();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.car_plate?.trim()) {
       toast.error("Kennzeichen ist Pflicht.");
+      return;
+    }
+    const sid = form.service_id || booking?.service_id;
+    if (!sid) {
+      toast.error("Bitte Service wählen.");
       return;
     }
     setSaving(true);
@@ -144,15 +168,18 @@ export default function CompleteBookingPage() {
         client_name: form.client_name || booking?.client_name,
         phone: form.phone || booking?.phone,
         email: form.email || booking?.email || null,
+        service_id: sid,
+        car_size: form.car_size,
+        extra_glanz: form.extra_glanz,
+        regie_price: form.regie_price ? parseFloat(form.regie_price) : null,
         car_plate: form.car_plate.trim(),
-        payment_method: form.payment_method,
         visible_damage_notes: form.visible_damage_notes || null,
         no_visible_damage: form.no_visible_damage,
         internal_notes: form.internal_notes || null,
         signature_image: form.signature_image || null,
         photos: form.photos?.length ? form.photos : null,
       });
-      toast.success("Termin abgeschlossen.");
+      toast.success("Formular gespeichert. Zahlung bitte unter „Zur Zahlung“ erfassen.");
       navigate("/worker");
     } catch (err) {
       toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
@@ -198,10 +225,59 @@ export default function CompleteBookingPage() {
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
           />
           <p className="text-muted" style={{ marginTop: 8 }}>
-            Service: {booking.service_name} · €{booking.service_price} · {format(startTime, "dd.MM.yyyy HH:mm", { locale: de })}
+            {format(startTime, "dd.MM.yyyy HH:mm", { locale: de })}
           </p>
 
-          <h3 className="checkin-form__section">Fahrzeug & Zahlung</h3>
+          <h3 className="checkin-form__section">Service & Fahrzeug</h3>
+          {services?.length > 0 && (
+            <div className="checkin-form__row">
+              <label className="input-label">Service</label>
+              <select
+                className="input-field"
+                value={form.service_id || booking?.service_id || ""}
+                onChange={(e) => setForm((f) => ({ ...f, service_id: Number(e.target.value) }))}
+              >
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} · €{s.price} · {s.duration} Min</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="checkin-form__row">
+            <label className="input-label">Fahrzeuggröße</label>
+            <select
+              className="input-field"
+              value={form.car_size}
+              onChange={(e) => setForm((f) => ({ ...f, car_size: e.target.value }))}
+            >
+              <option value="small">Klein</option>
+              <option value="large">Groß (+€24)</option>
+            </select>
+          </div>
+          <div className="checkin-form__row">
+            <label className="input-label">
+              <input
+                type="checkbox"
+                checked={form.extra_glanz}
+                onChange={(e) => setForm((f) => ({ ...f, extra_glanz: e.target.checked }))}
+              />
+              {" "}Extra Glanz (+€9)
+            </label>
+          </div>
+          <Input
+            label="Regie-Preis (optional, €)"
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.regie_price}
+            onChange={(e) => setForm((f) => ({ ...f, regie_price: e.target.value }))}
+            placeholder="0"
+          />
+          {previewPrice != null && (
+            <p className="text-muted" style={{ marginTop: 8 }}>
+              Voraussichtlicher Preis: <strong>€{previewPrice.toFixed(2)}</strong> (wird am Server berechnet)
+            </p>
+          )}
           <Input
             label="Kennzeichen"
             value={form.car_plate}
@@ -209,17 +285,6 @@ export default function CompleteBookingPage() {
             required
             placeholder="z.B. W-12345"
           />
-          <div className="checkin-form__row">
-            <label className="input-label">Zahlungsart</label>
-            <select
-              className="input-field"
-              value={form.payment_method}
-              onChange={(e) => setForm((f) => ({ ...f, payment_method: e.target.value }))}
-            >
-              <option value="cash">Bar</option>
-              <option value="card">Karte</option>
-            </select>
-          </div>
 
           <h3 className="checkin-form__section">Zustand</h3>
           <div className="checkin-form__row">

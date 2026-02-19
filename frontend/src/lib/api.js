@@ -88,6 +88,8 @@ export const ownerApi = {
     api.patch("/owner/me/password", { current_password, new_password }).then((r) => r.data),
   getWorktime: (params) =>
     api.get("/owner/worktime", { params }).then((r) => r.data),
+  updateWorktime: (id, body) =>
+    api.put(`/owner/worktime/${id}`, body).then((r) => r.data),
 };
 
 // Worker
@@ -103,11 +105,15 @@ export const workerApi = {
     api.post(`/worker/bookings/${id}/complete`).then((r) => r.data),
   completeBookingWithForm: (id, body) =>
     api.post(`/worker/bookings/${id}/complete`, body).then((r) => r.data),
+  payBooking: (id, body) =>
+    api.post(`/worker/bookings/${id}/pay`, body).then((r) => r.data),
   workTimeStart: () => api.post("/worker/time/start").then((r) => r.data),
   workTimeEnd: (pauseMinutes = 0) =>
     api.post("/worker/time/end", null, { params: { pause_minutes: pauseMinutes } }).then((r) => r.data),
   workTimeList: (params) =>
     api.get("/worker/time", { params }).then((r) => r.data),
+  workTimeUpdate: (id, body) =>
+    api.put(`/worker/time/${id}`, body).then((r) => r.data),
 };
 
 export default api;

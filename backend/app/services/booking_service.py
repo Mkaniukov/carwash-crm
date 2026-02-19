@@ -51,9 +51,10 @@ def create_booking_logic(
     if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
-    # --- Проверка пересечения ---
+    # --- Проверка пересечения (слот блокируется при booked/checked_in/confirmed) ---
+    active_statuses = ("booked", "checked_in", "confirmed")
     overlap = db.query(Booking).filter(
-        Booking.status == "confirmed",
+        Booking.status.in_(active_statuses),
         Booking.start_time < end_time,
         Booking.end_time > start_time
     ).first()
@@ -71,7 +72,7 @@ def create_booking_logic(
         service_price=service.price,
         start_time=start_time,
         end_time=end_time,
-        status="confirmed",
+        status="booked",
         created_by=created_by,
         source=source,
         cancel_token=cancel_token

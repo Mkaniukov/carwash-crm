@@ -26,6 +26,7 @@ from app.models.booking import Booking
 from app.models.service import Service
 from app.models.settings import BusinessSettings
 from app.models.checkin_form import CheckInForm
+from app.models.payment import Payment
 from app.models.work_time import WorkTime
 
 # 🔹 Импорт роутеров
