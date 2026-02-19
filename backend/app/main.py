@@ -35,16 +35,19 @@ from app.routers.owner import router as owner_router
 from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
-# 🔹 CORS (localhost + любой фронт на Render)
-# В production разрешаем любой origin на *.onrender.com (поддомен может отличаться)
+# 🔹 CORS (localhost + фронт на Render)
+# CORS_ORIGINS через запятую, например: http://localhost:5173,https://carwash-crm-web.onrender.com
+# Дополнительно всегда разрешаем любой https://*.onrender.com для фронта на Render
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").strip().split(",") if o.strip()]
+_allow_render_regex = r"https://.*\.onrender\.com"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com" if os.getenv("DATABASE_URL", "").startswith("postgres") else None,
+    allow_origin_regex=_allow_render_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # 🔥 ВАЖНО — create_all должен быть после импорта моделей
