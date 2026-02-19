@@ -26,6 +26,7 @@ def run():
                     conn.commit()
                     print(f"Enum bookingstatus: added value {val}")
                 except Exception as e:
+                    conn.rollback()
                     if "already exists" in str(e).lower():
                         print(f"Enum value {val} already exists, skip")
                     else:
@@ -45,6 +46,7 @@ def run():
                 conn.commit()
                 print(f"Added column {col}")
             except Exception as e:
+                conn.rollback()
                 if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
                     print(f"Column {col} already exists, skip")
                 else:
