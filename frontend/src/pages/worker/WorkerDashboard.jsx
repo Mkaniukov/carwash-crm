@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { format, addDays, startOfWeek, isToday, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import toast from "react-hot-toast";
@@ -81,6 +82,7 @@ function WorkerCalendar({ services, onSlotSelect }) {
 }
 
 export default function WorkerDashboard() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -123,14 +125,8 @@ export default function WorkerDashboard() {
     }
   };
 
-  const completeBooking = async (id) => {
-    try {
-      await workerApi.completeBooking(id);
-      toast.success("Als erledigt markiert.");
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Fehler."));
-    }
+  const openCompleteForm = (bookingId) => {
+    navigate(`/worker/booking/${bookingId}/complete`);
   };
 
   const openManual = (date, serviceId) => {
@@ -232,7 +228,7 @@ export default function WorkerDashboard() {
                       <div className="schedule-booking__actions">
                         {isActiveBooking(b) && (
                           <>
-                            <Button size="sm" onClick={() => completeBooking(b.id)}>Erledigt</Button>
+                            <Button size="sm" onClick={() => openCompleteForm(b.id)}>Formular ausfüllen</Button>
                             <Button variant="danger" size="sm" onClick={() => cancelBooking(b.id)}>Stornieren</Button>
                           </>
                         )}

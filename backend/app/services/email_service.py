@@ -8,9 +8,9 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-MAIL_FROM = os.getenv("MAIL_FROM")
+MAIL_USERNAME = (os.getenv("MAIL_USERNAME") or "").strip()
+MAIL_PASSWORD = (os.getenv("MAIL_PASSWORD") or "").strip().replace(" ", "")
+MAIL_FROM = (os.getenv("MAIL_FROM") or os.getenv("MAIL_USERNAME") or "").strip()
 # Ссылка «Termin stornieren» ведёт на фронт; в Render задать FRONTEND_URL = URL Static Site
 FRONTEND_URL = os.getenv("FRONTEND_URL", os.getenv("DOMAIN", "http://localhost:5173"))
 
@@ -18,9 +18,20 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
 
+def _smtp_configured():
+    return bool(MAIL_USERNAME and MAIL_PASSWORD and MAIL_FROM)
+
+
 def send_email(to_email: str, subject: str, body: str):
-    if not MAIL_USERNAME or not MAIL_PASSWORD:
-        log.warning("E-Mail nicht versendet: SMTP nicht konfiguriert (MAIL_USERNAME/MAIL_PASSWORD fehlen)")
+    if not _smtp_configured():
+        missing = []
+        if not MAIL_USERNAME:
+            missing.append("MAIL_USERNAME")
+        if not MAIL_PASSWORD:
+            missing.append("MAIL_PASSWORD")
+        if not MAIL_FROM:
+            missing.append("MAIL_FROM")
+        log.warning("E-Mail nicht versendet: SMTP nicht konfiguriert (%s)", ", ".join(missing) or "?")
         return
 
     msg = MIMEText(body)
@@ -31,8 +42,9 @@ def send_email(to_email: str, subject: str, body: str):
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
-            server.login(MAIL_USERNAME, MAIL_PASSWORD.replace(" ", ""))
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
             server.sendmail(MAIL_FROM, to_email, msg.as_string())
+        log.info("E-Mail gesendet an %s (Betreff: %s)", to_email, subject)
     except Exception as e:
         log.exception("E-Mail-Versand fehlgeschlagen: %s", e)
 

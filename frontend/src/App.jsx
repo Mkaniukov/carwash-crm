@@ -16,6 +16,9 @@ import Schedule from "./pages/owner/Schedule";
 import Settings from "./pages/owner/Settings";
 
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
+import CompleteBookingPage from "./pages/worker/CompleteBookingPage";
+import WorkerTimePage from "./pages/worker/WorkerTimePage";
+import OwnerWorktimePage from "./pages/owner/OwnerWorktimePage";
 
 export default function App() {
   return (
@@ -69,12 +72,36 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/owner/worktime"
+              element={
+                <ProtectedRoute role="owner">
+                  <OwnerWorktimePage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/worker"
               element={
                 <ProtectedRoute role="worker">
                   <WorkerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/worker/booking/:id/complete"
+              element={
+                <ProtectedRoute role="worker">
+                  <CompleteBookingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/worker/time"
+              element={
+                <ProtectedRoute role="worker">
+                  <WorkerTimePage />
                 </ProtectedRoute>
               }
             />

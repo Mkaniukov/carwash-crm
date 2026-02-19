@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.service import Service
 from app.models.booking import Booking, BookingSource
 from app.models.settings import BusinessSettings
+from app.models.work_time import WorkTime
 from app.services.email_service import send_cancellation_email
 
 router = APIRouter(prefix="/owner", tags=["owner"])
@@ -526,3 +527,40 @@ def export_bookings(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+# =====================================================
+# WORK TIME (учёт рабочего времени по сотрудникам)
+# =====================================================
+@router.get("/worktime")
+def owner_worktime_list(
+    worker_id: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    from sqlalchemy import extract
+    from datetime import date
+
+    q = db.query(WorkTime).options(joinedload(WorkTime.worker)).order_by(WorkTime.date.desc(), WorkTime.start_time.desc())
+    if worker_id is not None:
+        q = q.filter(WorkTime.worker_id == worker_id)
+    if year is not None:
+        q = q.filter(extract("year", WorkTime.date) == year)
+    if month is not None:
+        q = q.filter(extract("month", WorkTime.date) == month)
+    rows = q.limit(500).all()
+    return [
+        {
+            "id": r.id,
+            "worker_id": r.worker_id,
+            "worker_username": r.worker.username if r.worker else None,
+            "date": r.date.isoformat(),
+            "start_time": r.start_time.isoformat() if r.start_time else None,
+            "end_time": r.end_time.isoformat() if r.end_time else None,
+            "pause_minutes": r.pause_minutes,
+            "total_hours": float(r.total_hours) if r.total_hours is not None else None,
+        }
+        for r in rows
+    ]

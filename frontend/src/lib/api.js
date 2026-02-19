@@ -86,17 +86,28 @@ export const ownerApi = {
     api.patch("/owner/settings", null, { params }).then((r) => r.data),
   changePassword: (current_password, new_password) =>
     api.patch("/owner/me/password", { current_password, new_password }).then((r) => r.data),
+  getWorktime: (params) =>
+    api.get("/owner/worktime", { params }).then((r) => r.data),
 };
 
 // Worker
 export const workerApi = {
   getBookings: (params) =>
     api.get("/worker/bookings", { params }).then((r) => r.data),
+  getBooking: (id) =>
+    api.get(`/worker/bookings/${id}`).then((r) => r.data),
   createBooking: (body) => api.post("/worker/bookings", body).then((r) => r.data),
   cancelBooking: (id) =>
     api.post(`/worker/bookings/${id}/cancel`).then((r) => r.data),
   completeBooking: (id) =>
     api.post(`/worker/bookings/${id}/complete`).then((r) => r.data),
+  completeBookingWithForm: (id, body) =>
+    api.post(`/worker/bookings/${id}/complete`, body).then((r) => r.data),
+  workTimeStart: () => api.post("/worker/time/start").then((r) => r.data),
+  workTimeEnd: (pauseMinutes = 0) =>
+    api.post("/worker/time/end", null, { params: { pause_minutes: pauseMinutes } }).then((r) => r.data),
+  workTimeList: (params) =>
+    api.get("/worker/time", { params }).then((r) => r.data),
 };
 
 export default api;

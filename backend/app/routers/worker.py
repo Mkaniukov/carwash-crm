@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Body
 from sqlalchemy.orm import Session, joinedload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pydantic import BaseModel
 from typing import Optional
 
@@ -10,6 +10,9 @@ from app.models.user import User
 from app.models.booking import Booking, BookingSource
 from app.models.service import Service
 from app.models.settings import BusinessSettings
+from app.models.checkin_form import CheckInForm
+from app.models.work_time import WorkTime
+from app.schemas.checkin import CompleteBookingFormBody
 from app.services.booking_service import create_booking_logic
 from app.services.email_service import send_cancellation_email
 
@@ -129,6 +132,42 @@ def cancel_booking_post(
 
 
 # =====================================================
+# GET ONE BOOKING (для формы приёмки)
+# =====================================================
+@router.get("/bookings/{booking_id}")
+def get_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.service))
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+        raise HTTPException(status_code=400, detail="Booking is canceled")
+    if str(booking.status) == "completed":
+        raise HTTPException(status_code=400, detail="Booking already completed")
+    return {
+        "id": booking.id,
+        "client_name": booking.client_name,
+        "phone": booking.phone,
+        "email": booking.email,
+        "service_id": booking.service_id,
+        "service_price": booking.service_price,
+        "service_name": booking.service.name if booking.service else None,
+        "service_duration": booking.service.duration if booking.service else None,
+        "start_time": booking.start_time,
+        "end_time": booking.end_time,
+        "status": booking.status,
+    }
+
+
+# =====================================================
 # UPDATE STATUS (worker может менять любую запись)
 # =====================================================
 @router.patch("/bookings/{booking_id}/status")
@@ -160,16 +199,60 @@ def update_status(
 @router.post("/bookings/{booking_id}/complete")
 def complete_booking(
     booking_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("worker")),
+    body: Optional[CompleteBookingFormBody] = Body(None),
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.service))
+        .filter(Booking.id == booking_id)
+        .first()
+    )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
         raise HTTPException(status_code=400, detail="Cannot complete canceled booking")
+    if str(booking.status) == "completed":
+        raise HTTPException(status_code=400, detail="Booking already completed")
+
+    now = datetime.utcnow()
+
+    if body is not None:
+        if db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first():
+            raise HTTPException(status_code=400, detail="Check-in form already exists for this booking")
+        import json
+        form = CheckInForm(
+            booking_id=booking_id,
+            car_plate=body.car_plate.strip(),
+            payment_method=body.payment_method.value,
+            visible_damage_notes=body.visible_damage_notes or None,
+            no_visible_damage=body.no_visible_damage,
+            internal_notes=body.internal_notes or None,
+            signature_image=body.signature_image,
+            photos=json.dumps(body.photos) if body.photos else None,
+            completed_at=now,
+            completed_by=current_user.id,
+        )
+        db.add(form)
+        if body.client_name:
+            booking.client_name = body.client_name
+        if body.phone:
+            booking.phone = body.phone
+        if body.email is not None:
+            booking.email = body.email
+
     booking.status = "completed"
     db.commit()
+
+    if body is not None and background_tasks:
+        try:
+            from app.services.checkin_flow import on_booking_completed_with_form
+            background_tasks.add_task(on_booking_completed_with_form, booking_id)
+        except Exception:
+            pass
+
     return {"message": "Booking completed"}
 
 
@@ -252,4 +335,78 @@ def bookings_by_date(
             "end_time": b.end_time.strftime("%Y-%m-%dT%H:%M:%S")
         }
         for b in bookings
+    ]
+
+
+# =====================================================
+# WORK TIME (Arbeitsbeginn / Arbeitsende)
+# =====================================================
+@router.post("/time/start")
+def work_time_start(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    today = date.today()
+    existing = (
+        db.query(WorkTime)
+        .filter(WorkTime.worker_id == current_user.id, WorkTime.date == today, WorkTime.end_time.is_(None))
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Shift already started today")
+    wt = WorkTime(worker_id=current_user.id, start_time=datetime.utcnow(), date=today)
+    db.add(wt)
+    db.commit()
+    db.refresh(wt)
+    return {"message": "Arbeitsbeginn", "id": wt.id, "start_time": wt.start_time}
+
+
+@router.post("/time/end")
+def work_time_end(
+    pause_minutes: Optional[int] = Query(0, ge=0, le=480),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    today = date.today()
+    wt = (
+        db.query(WorkTime)
+        .filter(WorkTime.worker_id == current_user.id, WorkTime.date == today, WorkTime.end_time.is_(None))
+        .first()
+    )
+    if not wt:
+        raise HTTPException(status_code=400, detail="No active shift found for today")
+    end = datetime.utcnow()
+    wt.end_time = end
+    wt.pause_minutes = pause_minutes or 0
+    delta = (end - wt.start_time).total_seconds() / 3600 - (wt.pause_minutes / 60)
+    wt.total_hours = round(max(0, delta), 2)
+    db.commit()
+    return {"message": "Arbeitsende", "total_hours": float(wt.total_hours)}
+
+
+@router.get("/time")
+def work_time_list(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    q = db.query(WorkTime).filter(WorkTime.worker_id == current_user.id)
+    if year is not None:
+        from sqlalchemy import extract
+        q = q.filter(extract("year", WorkTime.date) == year)
+    if month is not None:
+        from sqlalchemy import extract
+        q = q.filter(extract("month", WorkTime.date) == month)
+    rows = q.order_by(WorkTime.date.desc(), WorkTime.start_time.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "date": r.date.isoformat(),
+            "start_time": r.start_time.isoformat() if r.start_time else None,
+            "end_time": r.end_time.isoformat() if r.end_time else None,
+            "pause_minutes": r.pause_minutes,
+            "total_hours": float(r.total_hours) if r.total_hours is not None else None,
+        }
+        for r in rows
     ]

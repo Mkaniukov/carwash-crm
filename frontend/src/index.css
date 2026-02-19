@@ -684,3 +684,24 @@ textarea {
 .error-boundary__title { margin: 0 0 var(--space-2); }
 .error-boundary__text { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 .error-boundary__actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+
+/* ===== Check-in form (Abnahme) ===== */
+.checkin-form { max-width: 560px; }
+.checkin-form__section { margin: var(--space-6) 0 var(--space-3); font-size: var(--text-base); }
+.checkin-form__section:first-child { margin-top: 0; }
+.checkin-form__row { margin-bottom: var(--space-4); }
+.checkin-form__row .input-label { display: block; margin-bottom: var(--space-1); }
+.checkin-form__actions { display: flex; gap: var(--space-3); margin-top: var(--space-6); flex-wrap: wrap; }
+.checkin-signature { margin-bottom: var(--space-4); }
+.checkin-signature canvas { display: block; margin-bottom: var(--space-2); }
+.checkin-form__photos { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.checkin-form__photo-wrap { display: flex; align-items: flex-start; gap: var(--space-1); }
+
+/* ===== Work time ===== */
+.worktime-actions { margin-bottom: var(--space-4); }
+.worktime-actions__row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.worktime-nav { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.worktime-filters__row { display: flex; gap: var(--space-6); flex-wrap: wrap; align-items: flex-end; }
+.worktime-table { width: 100%; border-collapse: collapse; }
+.worktime-table th, .worktime-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--color-border); }
+.worktime-table th { font-weight: var(--font-semibold); color: var(--color-text-muted); font-size: var(--text-sm); }
