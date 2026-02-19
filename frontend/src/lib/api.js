@@ -107,6 +107,11 @@ export const workerApi = {
     api.post(`/worker/bookings/${id}/complete`, body).then((r) => r.data),
   payBooking: (id, body) =>
     api.post(`/worker/bookings/${id}/pay`, body).then((r) => r.data),
+  getAbrechnungPdf: (fromDate, toDate) =>
+    api.get("/worker/abrechnung/pdf", {
+      params: { from_date: fromDate, to_date: toDate },
+      responseType: "blob",
+    }).then((r) => r.data),
   workTimeStart: () => api.post("/worker/time/start").then((r) => r.data),
   workTimeEnd: (pauseMinutes = 0) =>
     api.post("/worker/time/end", null, { params: { pause_minutes: pauseMinutes } }).then((r) => r.data),

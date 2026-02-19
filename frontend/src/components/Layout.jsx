@@ -75,6 +75,12 @@ export default function Layout({ children, role }) {
                 Kalender
               </Link>
               <Link
+                className={`sidebar__link ${isActive("/worker/abrechnung") ? "sidebar__link--active" : ""}`}
+                to="/worker/abrechnung"
+              >
+                Zur Abrechnung
+              </Link>
+              <Link
                 className={`sidebar__link ${isActive("/worker/time") ? "sidebar__link--active" : ""}`}
                 to="/worker/time"
               >

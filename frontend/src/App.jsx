@@ -18,6 +18,7 @@ import Settings from "./pages/owner/Settings";
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
 import CompleteBookingPage from "./pages/worker/CompleteBookingPage";
 import WorkerTimePage from "./pages/worker/WorkerTimePage";
+import AbrechnungPage from "./pages/worker/AbrechnungPage";
 import OwnerWorktimePage from "./pages/owner/OwnerWorktimePage";
 
 export default function App() {
@@ -102,6 +103,14 @@ export default function App() {
               element={
                 <ProtectedRoute role="worker">
                   <WorkerTimePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/worker/abrechnung"
+              element={
+                <ProtectedRoute role="worker">
+                  <AbrechnungPage />
                 </ProtectedRoute>
               }
             />

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from pydantic import BaseModel, Field
@@ -334,6 +335,97 @@ def pay_booking(
         pass
 
     return {"message": "Payment recorded", "status": "paid"}
+
+
+# =====================================================
+# ABRECHNUNG (PDF формуляр за период — оплаченные записи)
+# =====================================================
+@router.get("/abrechnung/pdf")
+def get_abrechnung_pdf(
+    from_date: str = Query(..., description="YYYY-MM-DD"),
+    to_date: str = Query(..., description="YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    """Возвращает PDF «ABRECHNUNG FÜR DIE AUTOPFLEGE» по оплаченным бронированиям за период."""
+    try:
+        start = datetime.strptime(from_date, "%Y-%m-%d")
+        end = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
+
+    if start > end:
+        raise HTTPException(status_code=400, detail="from_date must be <= to_date")
+
+    # Оплаченные брони за период: booking + form + последний payment
+    bookings = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.service),
+            joinedload(Booking.creator),
+            joinedload(Booking.checkin_form),
+            joinedload(Booking.payments),
+        )
+        .filter(
+            Booking.status.in_(("paid", "completed")),
+            Booking.start_time >= start,
+            Booking.start_time < end,
+        )
+        .order_by(Booking.start_time)
+        .all()
+    )
+
+    rows = []
+    for idx, b in enumerate(bookings, start=1):
+        form = b.checkin_form
+        payments = list(b.payments) if b.payments else []
+        last_payment = payments[-1] if payments else None
+        service_name = None
+        if form and getattr(form, "service_id", None):
+            svc = db.query(Service).filter(Service.id == form.service_id).first()
+            service_name = svc.name if svc else (b.service.name if b.service else "—")
+        else:
+            service_name = b.service.name if b.service else "—"
+        kennzeichen = form.car_plate if form else "—"
+        worker_name = b.creator.username if b.creator else "—"
+        bar_amount = None
+        card_amount = None
+        if last_payment:
+            amt = float(last_payment.amount)
+            if last_payment.payment_method == "cash":
+                bar_amount = amt
+            else:
+                card_amount = amt
+        rows.append({
+            "nr": idx,
+            "service_name": service_name,
+            "kennzeichen": kennzeichen,
+            "worker_name": worker_name,
+            "bar_amount": bar_amount,
+            "card_amount": card_amount,
+        })
+
+    import os
+    business_name = os.getenv("ABRECHNUNG_FIRMA", "Garage ALTE POST in 1010 Wien")
+    business_address = os.getenv("ABRECHNUNG_ADDRESS", "")
+
+    from app.services.pdf_service import generate_abrechnung_pdf
+    pdf_bytes = generate_abrechnung_pdf(
+        rows, start, end - timedelta(days=1),
+        invoice_number=start.strftime("%Y%m%d") + "-" + str(len(rows)),
+        business_name=business_name,
+        business_address=business_address,
+    )
+    if not pdf_bytes:
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+
+    from io import BytesIO
+    filename = f"Abrechnung_{from_date}_{to_date}.pdf"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 # =====================================================
