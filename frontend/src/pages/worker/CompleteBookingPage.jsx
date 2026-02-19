@@ -11,6 +11,9 @@ import { getErrorMessage } from "../../utils/error";
 function SignaturePad({ value, onChange }) {
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
+  const startRef = useRef((e) => {});
+  const drawRef = useRef((e) => {});
+  const endRef = useRef(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,8 +30,10 @@ function SignaturePad({ value, onChange }) {
     setDrawing(true);
     const rect = canvas.getBoundingClientRect();
     const ctx = canvas.getContext("2d");
+    const x = (e.clientX ?? e.touches?.[0]?.clientX ?? 0) - rect.left;
+    const y = (e.clientY ?? e.touches?.[0]?.clientY ?? 0) - rect.top;
     ctx.beginPath();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.moveTo(x, y);
   };
 
   const draw = (e) => {
@@ -37,7 +42,9 @@ function SignaturePad({ value, onChange }) {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const ctx = canvas.getContext("2d");
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    const x = (e.clientX ?? e.touches?.[0]?.clientX ?? 0) - rect.left;
+    const y = (e.clientY ?? e.touches?.[0]?.clientY ?? 0) - rect.top;
+    ctx.lineTo(x, y);
     ctx.stroke();
   };
 
@@ -46,6 +53,36 @@ function SignaturePad({ value, onChange }) {
     const canvas = canvasRef.current;
     if (canvas) onChange(canvas.toDataURL("image/png"));
   };
+
+  startRef.current = start;
+  drawRef.current = draw;
+  endRef.current = end;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const opts = { passive: false };
+    const onTouchStart = (e) => {
+      e.preventDefault();
+      if (e.touches?.[0]) startRef.current(e.touches[0]);
+    };
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      if (e.touches?.[0]) drawRef.current(e.touches[0]);
+    };
+    const onTouchEnd = (e) => {
+      e.preventDefault();
+      endRef.current();
+    };
+    canvas.addEventListener("touchstart", onTouchStart, opts);
+    canvas.addEventListener("touchmove", onTouchMove, opts);
+    canvas.addEventListener("touchend", onTouchEnd, opts);
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [drawing]);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -65,9 +102,6 @@ function SignaturePad({ value, onChange }) {
         onMouseMove={draw}
         onMouseUp={end}
         onMouseLeave={end}
-        onTouchStart={(e) => { e.preventDefault(); start(e.touches[0]); }}
-        onTouchMove={(e) => { e.preventDefault(); draw(e.touches[0]); }}
-        onTouchEnd={(e) => { e.preventDefault(); end(); }}
         style={{ border: "1px solid #ccc", borderRadius: 8, touchAction: "none" }}
       />
       <Button type="button" variant="ghost" size="sm" onClick={clear}>Löschen</Button>

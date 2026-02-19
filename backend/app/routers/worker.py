@@ -302,7 +302,10 @@ def pay_booking(
     if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
         raise HTTPException(status_code=400, detail="Cannot pay canceled booking")
     if str(booking.status) in ("completed", "paid"):
-        raise HTTPException(status_code=400, detail="Booking already paid")
+        raise HTTPException(
+            status_code=400,
+            detail="Bereits bezahlt. Dieser Termin ist abgeschlossen (Status: bezahlt).",
+        )
 
     form = db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first()
     if not form:
@@ -604,6 +607,17 @@ def work_time_update(
     current_user: User = Depends(require_role("worker")),
 ):
     """Сотрудник может редактировать только свои записи. total_hours пересчитывается на backend."""
+    try:
+        return _work_time_update_impl(time_id, body, db, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log = __import__("logging").getLogger(__name__)
+        log.exception("Work time update failed: %s", e)
+        raise HTTPException(status_code=500, detail="Fehler beim Speichern der Arbeitszeit.")
+
+
+def _work_time_update_impl(time_id: int, body: WorkTimeUpdateBody, db: Session, current_user: User):
     wt = db.query(WorkTime).filter(WorkTime.id == time_id).first()
     if not wt:
         raise HTTPException(status_code=404, detail="Work time record not found")
