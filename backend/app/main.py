@@ -41,6 +41,27 @@ _cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173").strip()
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 if "https://carwash-crm-web.onrender.com" not in _cors_origins:
     _cors_origins.append("https://carwash-crm-web.onrender.com")
+
+# Добавляем CORS ко всем ответам (в т.ч. при 500/4xx), чтобы браузер не блокировал
+def _cors_origin_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    if origin in _cors_origins:
+        return True
+    import re
+    return bool(re.match(r"https://.*\.onrender\.com$", origin))
+
+@app.middleware("http")
+async def add_cors_to_all_responses(request, call_next):
+    origin = request.headers.get("origin", "")
+    response = await call_next(request)
+    if _cors_origin_allowed(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*, Authorization, Content-Type"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,

@@ -589,10 +589,10 @@ def work_time_update(
     start = _parse_dt(body.start_time) if body.start_time else wt.start_time
     if body.end_time is None:
         end = wt.end_time
-    elif body.end_time.strip() == "":
+    elif isinstance(body.end_time, str) and body.end_time.strip() == "":
         end = None
     else:
-        end = _parse_dt(body.end_time)
+        end = _parse_dt(body.end_time) if body.end_time else None
     pause = body.pause_minutes if body.pause_minutes is not None else wt.pause_minutes
     wt.start_time = start
     wt.end_time = end
