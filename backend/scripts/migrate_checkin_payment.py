@@ -1,20 +1,37 @@
 """
-Миграция: добавить в checkin_forms поля service_id, car_size, extra_glanz, regie_price, final_price;
-сделать payment_method nullable; создать таблицу payments.
-Запуск: из корня backend: python -m scripts.migrate_checkin_payment
+Миграция: 1) новые значения enum status в PostgreSQL; 2) колонки в checkin_forms; 3) таблица payments через create_all.
+Запуск из корня backend: python -m scripts.migrate_checkin_payment
+На Render: в Dashboard → Shell или One-off job: установить DATABASE_URL и выполнить этот скрипт.
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.session import engine
+from app.db.session import engine, Base
 from sqlalchemy import text
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def run():
+    is_pg = "postgresql" in DATABASE_URL or DATABASE_URL.startswith("postgres://")
+
     with engine.connect() as conn:
-        # SQLite: добавляем колонки по одной (игнорируем ошибку если уже есть)
+        if is_pg:
+            # PostgreSQL: добавить новые значения в enum (имя типа обычно lowercase от имени класса)
+            for val in ("booked", "checked_in", "paid"):
+                try:
+                    conn.execute(text(f"ALTER TYPE bookingstatus ADD VALUE IF NOT EXISTS '{val}'"))
+                    conn.commit()
+                    print(f"Enum bookingstatus: added value {val}")
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        print(f"Enum value {val} already exists, skip")
+                    else:
+                        print(f"Enum {val}: {e}")
+
+        # Колонки в checkin_forms (SQLite и PostgreSQL)
         for col, sql in [
             ("service_id", "ALTER TABLE checkin_forms ADD COLUMN service_id INTEGER REFERENCES services(id)"),
             ("car_size", "ALTER TABLE checkin_forms ADD COLUMN car_size VARCHAR(16)"),
@@ -31,10 +48,11 @@ def run():
                     print(f"Column {col} already exists, skip")
                 else:
                     raise
-        # payment_method: в SQLite нельзя ALTER COLUMN; если изначально NOT NULL, оставляем как есть
-        # (новые строки без оплаты будут с NULL только если колонка уже nullable в модели)
-        # Таблица payments создаётся через create_all при старте приложения.
-    print("Migration done. Ensure Payment model is imported in main.py so payments table is created.")
+
+    # Таблица payments создаётся при старте приложения (create_all). При необходимости:
+    from app.models.payment import Payment
+    Base.metadata.create_all(bind=engine, tables=[Payment.__table__])
+    print("Migration done.")
 
 
 if __name__ == "__main__":

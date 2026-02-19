@@ -83,10 +83,7 @@ def list_bookings(
             q = q.filter(Booking.start_time < end)
         except ValueError:
             pass
-    bookings = q.options(
-        joinedload(Booking.service),
-        joinedload(Booking.checkin_form),
-    ).order_by(Booking.start_time).all()
+    bookings = q.options(joinedload(Booking.service)).order_by(Booking.start_time).all()
     return [
         {
             "id": b.id,
@@ -101,7 +98,7 @@ def list_bookings(
             "status": b.status,
             "source": b.source,
             "created_by": b.created_by,
-            "final_price": float(b.checkin_form.final_price) if b.checkin_form and b.checkin_form.final_price is not None else None,
+            "final_price": None,
         }
         for b in bookings
     ]

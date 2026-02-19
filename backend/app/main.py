@@ -60,6 +60,18 @@ app.include_router(owner_router)
 app.include_router(worker_router)
 app.include_router(public_router)
 
+# 🔹 При 500 всё равно отдаём ответ с CORS, чтобы в логах Render была видна ошибка
+@app.exception_handler(Exception)
+def catch_all_exception_handler(request, exc):
+    import traceback
+    log.exception("Unhandled exception: %s\n%s", exc, traceback.format_exc())
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "type": type(exc).__name__},
+    )
+
+
 # 🔹 Проверочный endpoint
 @app.get("/")
 def root():
