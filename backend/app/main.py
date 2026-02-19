@@ -36,14 +36,15 @@ from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
 # 🔹 CORS (localhost + фронт на Render)
-# CORS_ORIGINS через запятую, например: http://localhost:5173,https://carwash-crm-web.onrender.com
-# Дополнительно всегда разрешаем любой https://*.onrender.com для фронта на Render
-_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").strip().split(",") if o.strip()]
-_allow_render_regex = r"https://.*\.onrender\.com"
+# CORS_ORIGINS через запятую в env. Явно добавляем фронт на Render, чтобы точно не блокировать.
+_cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173").strip()
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+if "https://carwash-crm-web.onrender.com" not in _cors_origins:
+    _cors_origins.append("https://carwash-crm-web.onrender.com")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=_allow_render_regex,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
