@@ -305,10 +305,17 @@ def pay_booking(
 
     form = db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first()
     if not form:
-        raise HTTPException(status_code=400, detail="Cannot pay without check-in form")
+        raise HTTPException(
+            status_code=400,
+            detail="Zuerst Formular ausfüllen („Formular ausfüllen“), dann bezahlen.",
+        )
 
-    if str(booking.status) not in ("checked_in", "confirmed"):
-        raise HTTPException(status_code=400, detail="Booking must be checked in to pay")
+    # Разрешаем оплату при статусе checked_in, confirmed или booked (если формуляр уже есть)
+    if str(booking.status) not in ("checked_in", "confirmed", "booked"):
+        raise HTTPException(
+            status_code=400,
+            detail="Nur Termine mit ausgefülltem Formular können bezahlt werden.",
+        )
 
     payment = Payment(
         booking_id=booking_id,
