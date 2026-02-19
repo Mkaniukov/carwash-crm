@@ -306,12 +306,35 @@ def pay_booking(
 
     form = db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first()
     if not form:
-        raise HTTPException(
-            status_code=400,
-            detail="Zuerst Formular ausfüllen („Formular ausfüllen“), dann bezahlen.",
+        # Fallback: создать минимальный формуляр из данных брони, чтобы можно было оплатить (старые записи / крайние случаи)
+        if str(booking.status) not in ("checked_in", "confirmed", "booked"):
+            raise HTTPException(
+                status_code=400,
+                detail="Nur Termine mit ausgefülltem Formular können bezahlt werden.",
+            )
+        now = datetime.utcnow()
+        svc = db.query(Service).filter(Service.id == booking.service_id).first()
+        final = Decimal(str(svc.price)) if svc else Decimal(str(booking.service_price))
+        form = CheckInForm(
+            booking_id=booking_id,
+            service_id=booking.service_id,
+            car_size="small",
+            extra_glanz=False,
+            regie_price=None,
+            final_price=final,
+            car_plate="—",
+            payment_method="",
+            visible_damage_notes=None,
+            no_visible_damage=False,
+            internal_notes=None,
+            signature_image=None,
+            photos=None,
+            completed_at=now,
+            completed_by=current_user.id,
         )
+        db.add(form)
+        db.flush()
 
-    # Разрешаем оплату при статусе checked_in, confirmed или booked (если формуляр уже есть)
     if str(booking.status) not in ("checked_in", "confirmed", "booked"):
         raise HTTPException(
             status_code=400,
@@ -586,13 +609,20 @@ def work_time_update(
         raise HTTPException(status_code=404, detail="Work time record not found")
     if wt.worker_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only edit own work time")
-    start = _parse_dt(body.start_time) if body.start_time else wt.start_time
+    start = wt.start_time
+    if body.start_time and isinstance(body.start_time, str) and body.start_time.strip():
+        parsed = _parse_dt(body.start_time)
+        if parsed is not None:
+            start = parsed
+    end = wt.end_time
     if body.end_time is None:
-        end = wt.end_time
+        pass
     elif isinstance(body.end_time, str) and body.end_time.strip() == "":
         end = None
-    else:
-        end = _parse_dt(body.end_time) if body.end_time else None
+    elif body.end_time and isinstance(body.end_time, str) and body.end_time.strip():
+        parsed = _parse_dt(body.end_time)
+        if parsed is not None:
+            end = parsed
     pause = body.pause_minutes if body.pause_minutes is not None else wt.pause_minutes
     wt.start_time = start
     wt.end_time = end

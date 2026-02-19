@@ -107,6 +107,8 @@ export default function WorkerDashboard() {
   const [paySaving, setPaySaving] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
+  const [manualDate, setManualDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [manualTime, setManualTime] = useState("10:00");
 
   const load = () => {
     const from = format(weekStart, "yyyy-MM-dd");
@@ -146,7 +148,16 @@ export default function WorkerDashboard() {
 
   const openManual = (date, serviceId) => {
     setManualSlot(date);
-    setManualServiceId(serviceId);
+    setManualServiceId(serviceId ?? manualServiceId ?? services?.[0]?.id ?? null);
+    setManualClient("Walk-In Kunde");
+    setModalOpen(true);
+  };
+
+  const openManualWithDate = () => {
+    setManualSlot(null);
+    setManualDate(format(new Date(), "yyyy-MM-dd"));
+    setManualTime("10:00");
+    setManualServiceId(services?.[0]?.id ?? null);
     setManualClient("Walk-In Kunde");
     setModalOpen(true);
   };
@@ -154,14 +165,27 @@ export default function WorkerDashboard() {
   const submitManual = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (e && e.stopPropagation) e.stopPropagation();
-    if (!manualSlot || !manualServiceId) {
-      toast.error("Bitte wählen Sie zuerst ein Datum und eine Uhrzeit im Kalender.");
+    let startTime;
+    if (manualSlot) {
+      startTime = toLocalISOString(manualSlot);
+    } else {
+      if (!manualDate || !manualTime || !manualServiceId) {
+        toast.error("Bitte Datum, Uhrzeit und Service angeben.");
+        return;
+      }
+      const [h, m] = manualTime.split(":").map((x) => parseInt(x, 10) || 0);
+      const d = new Date(manualDate + "T00:00:00");
+      d.setHours(h, m, 0, 0);
+      startTime = toLocalISOString(d);
+    }
+    if (!manualServiceId) {
+      toast.error("Bitte Service wählen.");
       return;
     }
     setSaving(true);
     try {
       await workerApi.createBooking({
-        start_time: toLocalISOString(manualSlot),
+        start_time: startTime,
         service_id: manualServiceId,
         client_name: manualClient,
         phone: "—",
@@ -316,7 +340,13 @@ export default function WorkerDashboard() {
 
       <Card>
         <h3 className="schedule-day__title">Termin anlegen</h3>
+        <p className="text-muted" style={{ marginBottom: 12 }}>
+          Zeit im Kalender wählen oder unten „Datum/Uhrzeit eingeben“.
+        </p>
         <WorkerCalendar services={services} onSlotSelect={openManual} />
+        <Button type="button" variant="ghost" size="sm" onClick={openManualWithDate} style={{ marginTop: 12 }}>
+          Datum/Uhrzeit eingeben (ohne Kalender)
+        </Button>
       </Card>
 
       <Modal
@@ -336,16 +366,47 @@ export default function WorkerDashboard() {
           </>
         }
       >
-        {manualSlot && (
-          <div>
+        <div>
+          {manualSlot ? (
             <p><strong>Datum/Zeit:</strong> {format(manualSlot, "dd.MM.yyyy HH:mm", { locale: de })}</p>
-            <Input
-              label="Kundenname"
-              value={manualClient}
-              onChange={(e) => setManualClient(e.target.value)}
-            />
-          </div>
-        )}
+          ) : (
+            <>
+              <Input
+                label="Datum"
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+              />
+              <Input
+                label="Uhrzeit (HH:mm)"
+                type="time"
+                value={manualTime}
+                onChange={(e) => setManualTime(e.target.value)}
+              />
+              {services?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <label className="input-label">Service</label>
+                  <select
+                    className="input-field"
+                    value={manualServiceId ?? ""}
+                    onChange={(e) => setManualServiceId(Number(e.target.value))}
+                    style={{ width: "100%" }}
+                  >
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} · {s.duration} Min</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+          <Input
+            label="Kundenname"
+            value={manualClient}
+            onChange={(e) => setManualClient(e.target.value)}
+            style={{ marginTop: 12 }}
+          />
+        </div>
       </Modal>
 
       <Modal
