@@ -31,14 +31,15 @@ def run():
                     else:
                         print(f"Enum {val}: {e}")
 
-        # Колонки в checkin_forms (SQLite и PostgreSQL)
-        for col, sql in [
+        # Колонки в checkin_forms: PostgreSQL использует FALSE для BOOLEAN, SQLite — 0
+        columns = [
             ("service_id", "ALTER TABLE checkin_forms ADD COLUMN service_id INTEGER REFERENCES services(id)"),
             ("car_size", "ALTER TABLE checkin_forms ADD COLUMN car_size VARCHAR(16)"),
-            ("extra_glanz", "ALTER TABLE checkin_forms ADD COLUMN extra_glanz BOOLEAN DEFAULT 0 NOT NULL"),
+            ("extra_glanz", "ALTER TABLE checkin_forms ADD COLUMN extra_glanz BOOLEAN DEFAULT FALSE NOT NULL" if is_pg else "ALTER TABLE checkin_forms ADD COLUMN extra_glanz BOOLEAN DEFAULT 0 NOT NULL"),
             ("regie_price", "ALTER TABLE checkin_forms ADD COLUMN regie_price NUMERIC(10,2)"),
             ("final_price", "ALTER TABLE checkin_forms ADD COLUMN final_price NUMERIC(10,2)"),
-        ]:
+        ]
+        for col, sql in columns:
             try:
                 conn.execute(text(sql))
                 conn.commit()
