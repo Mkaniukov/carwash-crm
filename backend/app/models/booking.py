@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -7,14 +7,9 @@ from app.db.session import Base
 
 
 class BookingStatus(str, enum.Enum):
-    booked = "booked"                    # после создания
-    checked_in = "checked_in"            # после подписания формуляра
-    paid = "paid"                        # после оплаты
-    confirmed = "confirmed"              # legacy, трактуем как booked
-    completed = "completed"              # legacy, трактуем как paid
-    canceled_by_client = "canceled_by_client"
-    canceled_by_staff = "canceled_by_staff"
-    no_show = "no_show"
+    booked = "booked"
+    completed = "completed"
+    cancelled = "cancelled"
 
 
 class BookingSource(str, enum.Enum):
@@ -42,6 +37,9 @@ class Booking(Base):
     source = Column(Enum(BookingSource), default=BookingSource.website, nullable=False)
 
     cancel_token = Column(String, unique=True, index=True, nullable=True)
+
+    marketing_consent = Column(Boolean, default=False, nullable=False)
+    marketing_consent_at = Column(DateTime, nullable=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

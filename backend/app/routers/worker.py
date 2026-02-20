@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Body
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 
 from app.db.session import get_db
@@ -11,11 +10,7 @@ from app.models.user import User
 from app.models.booking import Booking, BookingSource
 from app.models.service import Service
 from app.models.settings import BusinessSettings
-from app.models.checkin_form import CheckInForm
 from app.models.work_time import WorkTime
-from app.schemas.checkin import CompleteBookingFormBody, PaymentCreateBody
-from app.models.payment import Payment
-from decimal import Decimal
 from app.services.booking_service import create_booking_logic
 from app.services.email_service import send_cancellation_email
 
@@ -27,13 +22,7 @@ class CreateBookingBody(BaseModel):
     client_name: str
     phone: str
     service_id: int
-    start_time: str  # ISO format from frontend, e.g. "2025-02-15T10:00:00"
-
-
-class WorkTimeUpdateBody(BaseModel):
-    start_time: Optional[str] = None  # ISO
-    end_time: Optional[str] = None    # ISO or null to clear
-    pause_minutes: Optional[int] = Field(None, ge=0, le=480)
+    start_time: str  # ISO format from frontend
 
 
 # =====================================================
@@ -99,7 +88,6 @@ def list_bookings(
             "status": b.status,
             "source": b.source,
             "created_by": b.created_by,
-            "final_price": None,
         }
         for b in bookings
     ]
@@ -112,9 +100,9 @@ def _do_cancel_booking(booking_id: int, db: Session, background_tasks: Backgroun
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Already canceled")
-    booking.status = "canceled_by_staff"
+    booking.status = "cancelled"
     db.commit()
     if booking.email and booking.source != BookingSource.worker:
         background_tasks.add_task(send_cancellation_email, booking)
@@ -142,7 +130,7 @@ def cancel_booking_post(
 
 
 # =====================================================
-# GET ONE BOOKING (для формы приёмки)
+# GET ONE BOOKING
 # =====================================================
 @router.get("/bookings/{booking_id}")
 def get_booking(
@@ -158,10 +146,8 @@ def get_booking(
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Booking is canceled")
-    if str(booking.status) in ("completed", "paid", "checked_in"):
-        raise HTTPException(status_code=400, detail="Booking already completed or in progress")
     return {
         "id": booking.id,
         "client_name": booking.client_name,
@@ -178,7 +164,29 @@ def get_booking(
 
 
 # =====================================================
-# UPDATE STATUS (worker может менять любую запись)
+# MARK COMPLETED (Erledigt — только смена статуса на completed)
+# =====================================================
+@router.post("/bookings/{booking_id}/complete")
+def mark_booking_completed(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    """Кнопка «Erledigt»: установить status=completed без форм и оплаты."""
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if str(booking.status) == "cancelled":
+        raise HTTPException(status_code=400, detail="Cannot complete canceled booking")
+    if str(booking.status) == "completed":
+        raise HTTPException(status_code=400, detail="Booking already completed")
+    booking.status = "completed"
+    db.commit()
+    return {"message": "Erledigt", "status": "completed"}
+
+
+# =====================================================
+# UPDATE STATUS (booked | completed | cancelled)
 # =====================================================
 @router.patch("/bookings/{booking_id}/status")
 def update_status(
@@ -187,271 +195,16 @@ def update_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("worker")),
 ):
-    allowed_statuses = [
-        "booked", "checked_in", "paid",
-        "confirmed", "completed",  # legacy
-        "canceled_by_staff", "canceled_by_client", "no_show",
-    ]
-    if new_status not in allowed_statuses:
+    if new_status not in ("booked", "completed", "cancelled"):
         raise HTTPException(status_code=400, detail="Invalid status")
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot modify canceled booking")
-    # Нельзя переводить напрямую booked → paid
-    if str(booking.status) in ("booked", "confirmed") and new_status in ("paid", "completed"):
-        raise HTTPException(status_code=400, detail="Cannot set paid without check-in form")
     booking.status = new_status
     db.commit()
     return {"message": "Status updated"}
-
-
-def _compute_final_price(db: Session, service_id: int, car_size: str, extra_glanz: bool, regie_price: Optional[float]) -> Decimal:
-    """Цена только на backend: base + large + extra_glanz + regie."""
-    service = db.query(Service).filter(Service.id == service_id).first()
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
-    base = Decimal(str(service.price))
-    if car_size == "large":
-        base += Decimal("24")
-    if extra_glanz:
-        base += Decimal("9")
-    if regie_price is not None and regie_price > 0:
-        base += Decimal(str(regie_price))
-    return base
-
-
-@router.post("/bookings/{booking_id}/complete")
-def complete_booking(
-    booking_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("worker")),
-    body: CompleteBookingFormBody = Body(...),
-):
-    """Подписание формуляра: создаётся CheckInForm, status=checked_in. Оплата не здесь."""
-    booking = (
-        db.query(Booking)
-        .options(joinedload(Booking.service))
-        .filter(Booking.id == booking_id)
-        .first()
-    )
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
-        raise HTTPException(status_code=400, detail="Cannot complete canceled booking")
-    if str(booking.status) in ("completed", "paid", "checked_in"):
-        raise HTTPException(status_code=400, detail="Booking already completed or checked in")
-
-    if db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first():
-        raise HTTPException(status_code=400, detail="Check-in form already exists for this booking")
-
-    final_price = _compute_final_price(
-        db, body.service_id, body.car_size.value, body.extra_glanz, body.regie_price
-    )
-    now = datetime.utcnow()
-    import json
-    form = CheckInForm(
-        booking_id=booking_id,
-        service_id=body.service_id,
-        car_size=body.car_size.value,
-        extra_glanz=body.extra_glanz,
-        regie_price=Decimal(str(body.regie_price)) if body.regie_price is not None else None,
-        final_price=final_price,
-        car_plate=body.car_plate.strip(),
-        payment_method="",  # оплата указывается при создании Payment (legacy DB может требовать NOT NULL)
-        visible_damage_notes=body.visible_damage_notes or None,
-        no_visible_damage=body.no_visible_damage,
-        internal_notes=body.internal_notes or None,
-        signature_image=body.signature_image,
-        photos=json.dumps(body.photos) if body.photos else None,
-        completed_at=now,
-        completed_by=current_user.id,
-    )
-    db.add(form)
-    if body.client_name:
-        booking.client_name = body.client_name
-    if body.phone:
-        booking.phone = body.phone
-    if body.email is not None:
-        booking.email = body.email
-
-    booking.status = "checked_in"
-    db.commit()
-
-    return {"message": "Check-in form saved", "status": "checked_in"}
-
-
-@router.post("/bookings/{booking_id}/pay")
-def pay_booking(
-    booking_id: int,
-    body: PaymentCreateBody,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("worker")),
-):
-    """Оплата: создаётся Payment, status=paid, затем PDF и Google (только после оплаты)."""
-    booking = (
-        db.query(Booking)
-        .options(joinedload(Booking.service))
-        .filter(Booking.id == booking_id)
-        .first()
-    )
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
-        raise HTTPException(status_code=400, detail="Cannot pay canceled booking")
-    if str(booking.status) in ("completed", "paid"):
-        raise HTTPException(
-            status_code=400,
-            detail="Bereits bezahlt. Dieser Termin ist abgeschlossen (Status: bezahlt).",
-        )
-
-    form = db.query(CheckInForm).filter(CheckInForm.booking_id == booking_id).first()
-    if not form:
-        # Fallback: создать минимальный формуляр из данных брони, чтобы можно было оплатить (старые записи / крайние случаи)
-        if str(booking.status) not in ("checked_in", "confirmed", "booked"):
-            raise HTTPException(
-                status_code=400,
-                detail="Nur Termine mit ausgefülltem Formular können bezahlt werden.",
-            )
-        now = datetime.utcnow()
-        svc = db.query(Service).filter(Service.id == booking.service_id).first()
-        final = Decimal(str(svc.price)) if svc else Decimal(str(booking.service_price))
-        form = CheckInForm(
-            booking_id=booking_id,
-            service_id=booking.service_id,
-            car_size="small",
-            extra_glanz=False,
-            regie_price=None,
-            final_price=final,
-            car_plate="—",
-            payment_method="",
-            visible_damage_notes=None,
-            no_visible_damage=False,
-            internal_notes=None,
-            signature_image=None,
-            photos=None,
-            completed_at=now,
-            completed_by=current_user.id,
-        )
-        db.add(form)
-        db.flush()
-
-    if str(booking.status) not in ("checked_in", "confirmed", "booked"):
-        raise HTTPException(
-            status_code=400,
-            detail="Nur Termine mit ausgefülltem Formular können bezahlt werden.",
-        )
-
-    payment = Payment(
-        booking_id=booking_id,
-        amount=Decimal(str(body.amount)),
-        payment_method=body.payment_method.value,
-        paid_by=current_user.id,
-    )
-    db.add(payment)
-    booking.status = "paid"
-    db.commit()
-
-    try:
-        from app.services.checkin_flow import on_booking_paid
-        background_tasks.add_task(on_booking_paid, booking_id)
-    except Exception:
-        pass
-
-    return {"message": "Payment recorded", "status": "paid"}
-
-
-# =====================================================
-# ABRECHNUNG (PDF формуляр за период — оплаченные записи)
-# =====================================================
-@router.get("/abrechnung/pdf")
-def get_abrechnung_pdf(
-    from_date: str = Query(..., description="YYYY-MM-DD"),
-    to_date: str = Query(..., description="YYYY-MM-DD"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("worker")),
-):
-    """Возвращает PDF «ABRECHNUNG FÜR DIE AUTOPFLEGE» по оплаченным бронированиям за период."""
-    try:
-        start = datetime.strptime(from_date, "%Y-%m-%d")
-        end = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
-
-    if start > end:
-        raise HTTPException(status_code=400, detail="from_date must be <= to_date")
-
-    # Оплаченные брони за период: booking + form + последний payment
-    bookings = (
-        db.query(Booking)
-        .options(
-            joinedload(Booking.service),
-            joinedload(Booking.creator),
-            joinedload(Booking.checkin_form),
-            joinedload(Booking.payments),
-        )
-        .filter(
-            Booking.status.in_(("paid", "completed")),
-            Booking.start_time >= start,
-            Booking.start_time < end,
-        )
-        .order_by(Booking.start_time)
-        .all()
-    )
-
-    rows = []
-    for idx, b in enumerate(bookings, start=1):
-        form = b.checkin_form
-        payments = list(b.payments) if b.payments else []
-        last_payment = payments[-1] if payments else None
-        service_name = None
-        if form and getattr(form, "service_id", None):
-            svc = db.query(Service).filter(Service.id == form.service_id).first()
-            service_name = svc.name if svc else (b.service.name if b.service else "—")
-        else:
-            service_name = b.service.name if b.service else "—"
-        kennzeichen = form.car_plate if form else "—"
-        worker_name = b.creator.username if b.creator else "—"
-        bar_amount = None
-        card_amount = None
-        if last_payment:
-            amt = float(last_payment.amount)
-            if last_payment.payment_method == "cash":
-                bar_amount = amt
-            else:
-                card_amount = amt
-        rows.append({
-            "nr": idx,
-            "service_name": service_name,
-            "kennzeichen": kennzeichen,
-            "worker_name": worker_name,
-            "bar_amount": bar_amount,
-            "card_amount": card_amount,
-        })
-
-    import os
-    business_name = os.getenv("ABRECHNUNG_FIRMA", "Garage ALTE POST in 1010 Wien")
-    business_address = os.getenv("ABRECHNUNG_ADDRESS", "")
-
-    from app.services.pdf_service import generate_abrechnung_pdf
-    pdf_bytes = generate_abrechnung_pdf(
-        rows, start, end - timedelta(days=1),
-        invoice_number=start.strftime("%Y%m%d") + "-" + str(len(rows)),
-        business_name=business_name,
-        business_address=business_address,
-    )
-    if not pdf_bytes:
-        raise HTTPException(status_code=500, detail="PDF generation failed")
-
-    from io import BytesIO
-    filename = f"Abrechnung_{from_date}_{to_date}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
 
 
 # =====================================================
@@ -468,7 +221,7 @@ def reschedule_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    if booking.status in ["canceled_by_staff", "canceled_by_client"]:
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot modify canceled booking")
 
     service = db.query(Service).filter(Service.id == booking.service_id).first()
@@ -488,7 +241,7 @@ def reschedule_booking(
         raise HTTPException(status_code=400, detail="Outside working hours")
 
     # --- Проверка пересечения ---
-    active_statuses = ("booked", "checked_in", "confirmed")
+    active_statuses = ("booked",)
     overlap = db.query(Booking).filter(
         Booking.id != booking_id,
         Booking.status.in_(active_statuses),
@@ -581,78 +334,6 @@ def work_time_end(
     wt.total_hours = round(max(0, delta), 2)
     db.commit()
     return {"message": "Arbeitsende", "total_hours": float(wt.total_hours)}
-
-
-def _parse_dt(s: str | None):
-    if not s:
-        return None
-    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-    return dt.replace(tzinfo=None) if dt.tzinfo else dt
-
-
-def _recalc_total_hours(start: datetime, end: datetime | None, pause_minutes: int) -> float | None:
-    if end is None:
-        return None
-    if end < start:
-        raise HTTPException(status_code=400, detail="end_time must be >= start_time")
-    delta = (end - start).total_seconds() / 3600 - (pause_minutes / 60)
-    return round(max(0, delta), 2)
-
-
-@router.put("/time/{time_id}")
-def work_time_update(
-    time_id: int,
-    body: WorkTimeUpdateBody,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("worker")),
-):
-    """Сотрудник может редактировать только свои записи. total_hours пересчитывается на backend."""
-    try:
-        return _work_time_update_impl(time_id, body, db, current_user)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log = __import__("logging").getLogger(__name__)
-        log.exception("Work time update failed: %s", e)
-        raise HTTPException(status_code=500, detail="Fehler beim Speichern der Arbeitszeit.")
-
-
-def _work_time_update_impl(time_id: int, body: WorkTimeUpdateBody, db: Session, current_user: User):
-    wt = db.query(WorkTime).filter(WorkTime.id == time_id).first()
-    if not wt:
-        raise HTTPException(status_code=404, detail="Work time record not found")
-    if wt.worker_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Can only edit own work time")
-    start = wt.start_time
-    if body.start_time and isinstance(body.start_time, str) and body.start_time.strip():
-        parsed = _parse_dt(body.start_time)
-        if parsed is not None:
-            start = parsed
-    end = wt.end_time
-    if body.end_time is None:
-        pass
-    elif isinstance(body.end_time, str) and body.end_time.strip() == "":
-        end = None
-    elif body.end_time and isinstance(body.end_time, str) and body.end_time.strip():
-        parsed = _parse_dt(body.end_time)
-        if parsed is not None:
-            end = parsed
-    pause = body.pause_minutes if body.pause_minutes is not None else wt.pause_minutes
-    wt.start_time = start
-    wt.end_time = end
-    wt.pause_minutes = pause
-    th = _recalc_total_hours(start, end, pause)
-    wt.total_hours = th
-    db.commit()
-    db.refresh(wt)
-    return {
-        "id": wt.id,
-        "date": wt.date.isoformat(),
-        "start_time": wt.start_time.isoformat(),
-        "end_time": wt.end_time.isoformat() if wt.end_time else None,
-        "pause_minutes": wt.pause_minutes,
-        "total_hours": float(wt.total_hours) if wt.total_hours is not None else None,
-    }
 
 
 @router.get("/time")

@@ -53,6 +53,12 @@ export default function Layout({ children, role }) {
                 Termine
               </Link>
               <Link
+                className={`sidebar__link ${isActive("/owner/customers") ? "sidebar__link--active" : ""}`}
+                to="/owner/customers"
+              >
+                Kunden
+              </Link>
+              <Link
                 className={`sidebar__link ${isActive("/owner/settings") ? "sidebar__link--active" : ""}`}
                 to="/owner/settings"
               >
@@ -73,12 +79,6 @@ export default function Layout({ children, role }) {
                 to="/worker"
               >
                 Kalender
-              </Link>
-              <Link
-                className={`sidebar__link ${isActive("/worker/abrechnung") ? "sidebar__link--active" : ""}`}
-                to="/worker/abrechnung"
-              >
-                Zur Abrechnung
               </Link>
               <Link
                 className={`sidebar__link ${isActive("/worker/time") ? "sidebar__link--active" : ""}`}

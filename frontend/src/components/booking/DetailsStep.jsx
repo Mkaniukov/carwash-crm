@@ -56,6 +56,20 @@ export default function DetailsStep({ details, setDetails, onSubmit, loading }) 
           autoComplete="email"
           required
         />
+        <div className="details-form__marketing" style={{ marginTop: 16 }}>
+          <label className="input-label" style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={!!details.marketing_consent}
+              onChange={(e) => setDetails((d) => ({ ...d, marketing_consent: e.target.checked }))}
+              style={{ marginTop: 4 }}
+            />
+            <span>
+              Ich möchte Informationen zu Aktionen und Angeboten per E-Mail erhalten.
+              Ich kann meine Einwilligung jederzeit widerrufen.
+            </span>
+          </label>
+        </div>
         <Button type="submit" disabled={!valid} loading={loading} className="details-form__submit">
           Weiter zur Bestätigung
         </Button>

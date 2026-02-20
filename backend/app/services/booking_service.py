@@ -16,7 +16,8 @@ def create_booking_logic(
     service_id: int,
     start_time: datetime,
     source: str,
-    created_by: int | None = None
+    created_by: int | None = None,
+    marketing_consent: bool = False,
 ):
     service = db.query(Service).filter(Service.id == service_id).first()
     if not service:
@@ -51,8 +52,8 @@ def create_booking_logic(
     if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
-    # --- Проверка пересечения (слот блокируется при booked/checked_in/confirmed) ---
-    active_statuses = ("booked", "checked_in", "confirmed")
+    # --- Проверка пересечения (слот блокируется при booked) ---
+    active_statuses = ("booked",)
     overlap = db.query(Booking).filter(
         Booking.status.in_(active_statuses),
         Booking.start_time < end_time,
@@ -64,6 +65,7 @@ def create_booking_logic(
 
     cancel_token = secrets.token_urlsafe(32)
 
+    now = datetime.utcnow()
     booking = Booking(
         client_name=client_name,
         phone=phone,
@@ -75,7 +77,9 @@ def create_booking_logic(
         status="booked",
         created_by=created_by,
         source=source,
-        cancel_token=cancel_token
+        cancel_token=cancel_token,
+        marketing_consent=bool(marketing_consent),
+        marketing_consent_at=now if marketing_consent else None,
     )
 
     db.add(booking)

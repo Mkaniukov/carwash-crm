@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { format, addDays, startOfWeek, isToday, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import toast from "react-hot-toast";
@@ -11,19 +10,10 @@ import { toLocalISOString } from "../../utils/date";
 import { useAvailableSlots } from "../../hooks/useAvailableSlots";
 
 function isBooked(b) {
-  const s = (b.status || "").toLowerCase();
-  return s === "booked" || s === "confirmed";
+  return (b.status || "").toLowerCase() === "booked";
 }
-function isCheckedIn(b) {
-  const s = (b.status || "").toLowerCase();
-  return s === "checked_in";
-}
-function isPaid(b) {
-  const s = (b.status || "").toLowerCase();
-  return s === "paid" || s === "completed";
-}
-function isActiveBooking(b) {
-  return isBooked(b) || isCheckedIn(b);
+function isCompleted(b) {
+  return (b.status || "").toLowerCase() === "completed";
 }
 
 function WorkerCalendar({ services, onSlotSelect }) {
@@ -93,7 +83,6 @@ function WorkerCalendar({ services, onSlotSelect }) {
 }
 
 export default function WorkerDashboard() {
-  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,10 +92,7 @@ export default function WorkerDashboard() {
   const [manualServiceId, setManualServiceId] = useState(null);
   const [manualClient, setManualClient] = useState("Walk-In");
   const [saving, setSaving] = useState(false);
-  const [paymentModal, setPaymentModal] = useState(null); // { id, final_price }
-  const [paySaving, setPaySaving] = useState(false);
-  const [payAmount, setPayAmount] = useState("");
-  const [payMethod, setPayMethod] = useState("cash");
+  const [completingId, setCompletingId] = useState(null);
   const [manualDate, setManualDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [manualTime, setManualTime] = useState("10:00");
 
@@ -142,8 +128,18 @@ export default function WorkerDashboard() {
     }
   };
 
-  const openCompleteForm = (bookingId) => {
-    navigate(`/worker/booking/${bookingId}/complete`);
+  const markCompleted = async (id) => {
+    if (!window.confirm("Termin als erledigt markieren?")) return;
+    setCompletingId(id);
+    try {
+      await workerApi.markCompleted(id);
+      toast.success("Erledigt.");
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Fehler."));
+    } finally {
+      setCompletingId(null);
+    }
   };
 
   const openManual = (date, serviceId) => {
@@ -205,10 +201,7 @@ export default function WorkerDashboard() {
   const nextWeek = () => setWeekStart((d) => addDays(d, 7));
   const goToday = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
-  const isCanceled = (b) => {
-    const s = (b.status || "").toLowerCase();
-    return s === "canceled_by_staff" || s === "canceled_by_client";
-  };
+  const isCanceled = (b) => (b.status || "").toLowerCase() === "cancelled";
 
   const bookingsByDay = {};
   weekDays.forEach((d) => {
@@ -220,36 +213,9 @@ export default function WorkerDashboard() {
     });
     bookingsByDay[key] = {
       booked: dayBookings.filter(isBooked),
-      checked_in: dayBookings.filter(isCheckedIn),
-      paid: dayBookings.filter(isPaid),
+      completed: dayBookings.filter(isCompleted),
     };
   });
-
-  const openPayment = (b) => {
-    setPaymentModal({ id: b.id, final_price: b.final_price ?? b.service_price });
-    setPayAmount(String(b.final_price ?? b.service_price ?? ""));
-    setPayMethod("cash");
-  };
-
-  const submitPayment = async () => {
-    if (!paymentModal) return;
-    const amount = parseFloat(payAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Bitte gültigen Betrag eingeben.");
-      return;
-    }
-    setPaySaving(true);
-    try {
-      await workerApi.payBooking(paymentModal.id, { amount, payment_method: payMethod });
-      toast.success("Zahlung erfasst.");
-      setPaymentModal(null);
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Zahlung fehlgeschlagen."));
-    } finally {
-      setPaySaving(false);
-    }
-  };
 
   return (
     <Layout role="worker">
@@ -279,8 +245,8 @@ export default function WorkerDashboard() {
               </h3>
               <div className="schedule-day__list">
                 {(() => {
-                  const dayData = bookingsByDay[format(day, "yyyy-MM-dd")] || { booked: [], checked_in: [], paid: [] };
-                  const hasAny = dayData.booked.length + dayData.checked_in.length + dayData.paid.length > 0;
+                  const dayData = bookingsByDay[format(day, "yyyy-MM-dd")] || { booked: [], completed: [] };
+                  const hasAny = dayData.booked.length + dayData.completed.length > 0;
                   if (!hasAny) return <p className="schedule-day__empty">Keine Termine</p>;
                   const renderCard = (b, actions) => (
                     <div key={b.id} className="schedule-booking">
@@ -306,27 +272,18 @@ export default function WorkerDashboard() {
                           <div className="schedule-day__block-title">Geplant</div>
                           {dayData.booked.map((b) => renderCard(b, (
                             <>
-                              <Button size="sm" onClick={() => openCompleteForm(b.id)}>Formular ausfüllen</Button>
+                              <Button size="sm" onClick={() => markCompleted(b.id)} disabled={completingId === b.id}>
+                                {completingId === b.id ? "…" : "Erledigt"}
+                              </Button>
                               <Button variant="danger" size="sm" onClick={() => cancelBooking(b.id)}>Stornieren</Button>
                             </>
                           )))}
                         </div>
                       )}
-                      {dayData.checked_in.length > 0 && (
+                      {dayData.completed.length > 0 && (
                         <div className="schedule-day__block">
-                          <div className="schedule-day__block-title">Unterschrieben / In Arbeit</div>
-                          {dayData.checked_in.map((b) => renderCard(b, (
-                            <>
-                              <Button size="sm" onClick={() => openPayment(b)}>Zur Zahlung</Button>
-                              <Button variant="danger" size="sm" onClick={() => cancelBooking(b.id)}>Stornieren</Button>
-                            </>
-                          )))}
-                        </div>
-                      )}
-                      {dayData.paid.length > 0 && (
-                        <div className="schedule-day__block">
-                          <div className="schedule-day__block-title">Bezahlt</div>
-                          {dayData.paid.map((b) => renderCard(b, null))}
+                          <div className="schedule-day__block-title">Erledigt</div>
+                          {dayData.completed.map((b) => renderCard(b, null))}
                         </div>
                       )}
                     </>
@@ -409,41 +366,6 @@ export default function WorkerDashboard() {
         </div>
       </Modal>
 
-      <Modal
-        open={!!paymentModal}
-        onClose={() => setPaymentModal(null)}
-        title="Zur Zahlung"
-        footer={
-          <>
-            <Button type="button" variant="secondary" onClick={() => setPaymentModal(null)}>Abbrechen</Button>
-            <Button type="button" loading={paySaving} onClick={submitPayment}>Zahlung erfassen</Button>
-          </>
-        }
-      >
-        {paymentModal && (
-          <div>
-            <Input
-              label="Betrag (€)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={payAmount}
-              onChange={(e) => setPayAmount(e.target.value)}
-            />
-            <div className="checkin-form__row" style={{ marginTop: 12 }}>
-              <label className="input-label">Zahlungsart</label>
-              <select
-                className="input-field"
-                value={payMethod}
-                onChange={(e) => setPayMethod(e.target.value)}
-              >
-                <option value="cash">Bar</option>
-                <option value="card">Karte</option>
-              </select>
-            </div>
-          </div>
-        )}
-      </Modal>
     </Layout>
   );
 }

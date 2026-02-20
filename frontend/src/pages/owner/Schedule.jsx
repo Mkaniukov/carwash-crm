@@ -54,10 +54,7 @@ export default function Schedule() {
   const nextWeek = () => setWeekStart((d) => addDays(d, 7));
   const goToday = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
-  const isCanceled = (b) => {
-    const s = (b.status || "").toLowerCase();
-    return s === "canceled_by_staff" || s === "canceled_by_client";
-  };
+  const isCanceled = (b) => (b.status || "").toLowerCase() === "cancelled";
 
   const bookingsByDay = {};
   weekDays.forEach((d) => {

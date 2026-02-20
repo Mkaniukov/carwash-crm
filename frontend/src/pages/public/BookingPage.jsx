@@ -46,6 +46,7 @@ export default function BookingPage() {
         client_name: details.name,
         phone: details.phone,
         email: details.email,
+        marketing_consent: !!details.marketing_consent,
       });
       navigate("/success", {
         state: {

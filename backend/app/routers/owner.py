@@ -301,9 +301,9 @@ def owner_cancel_booking(
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Already canceled")
-    booking.status = "canceled_by_staff"
+    booking.status = "cancelled"
     db.commit()
     if booking.email and booking.source != BookingSource.worker:
         background_tasks.add_task(send_cancellation_email, booking)
@@ -324,7 +324,7 @@ def owner_reschedule_booking(
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    if str(booking.status) in ("canceled_by_staff", "canceled_by_client"):
+    if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot reschedule canceled booking")
     start_time = datetime.fromisoformat(body.start_time.replace("Z", "+00:00"))
     if start_time.tzinfo:
@@ -338,7 +338,7 @@ def owner_reschedule_booking(
         raise HTTPException(status_code=400, detail="Closed on this day")
     if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
-    active_statuses = ("booked", "checked_in", "confirmed")
+    active_statuses = ("booked",)
     overlap = (
         db.query(Booking)
         .filter(
@@ -417,25 +417,25 @@ def owner_analytics(
     start_of_day = datetime(now.year, now.month, now.day)
     start_of_month = datetime(now.year, now.month, 1)
 
-    paid_statuses = ("paid", "completed")
+    completed_status = "completed"
     revenue_today = db.query(func.sum(Booking.service_price)).filter(
-        Booking.status.in_(paid_statuses),
+        Booking.status == completed_status,
         Booking.start_time >= start_of_day
     ).scalar() or 0
 
     revenue_month = db.query(func.sum(Booking.service_price)).filter(
-        Booking.status.in_(paid_statuses),
+        Booking.status == completed_status,
         Booking.start_time >= start_of_month
     ).scalar() or 0
 
     completed_count = db.query(func.count(Booking.id)).filter(
-        Booking.status.in_(paid_statuses)
+        Booking.status == completed_status
     ).scalar() or 0
 
     total_bookings = db.query(func.count(Booking.id)).scalar() or 0
 
     canceled_count = db.query(func.count(Booking.id)).filter(
-        Booking.status.in_(["canceled_by_client", "canceled_by_staff"])
+        Booking.status == "cancelled"
     ).scalar() or 0
 
     cancel_rate = round((canceled_count / total_bookings) * 100, 2) if total_bookings else 0
@@ -445,16 +445,16 @@ def owner_analytics(
         Booking.source,
         func.sum(Booking.service_price)
     ).filter(
-        Booking.status.in_(paid_statuses)
+        Booking.status == completed_status
     ).group_by(Booking.source).all()
 
-    source_data = {source: revenue or 0 for source, revenue in revenue_by_source}
+    source_data = {str(source): revenue or 0 for source, revenue in revenue_by_source}
 
     revenue_by_worker = db.query(
         User.username,
         func.sum(Booking.service_price)
     ).join(Booking, Booking.created_by == User.id).filter(
-        Booking.status.in_(paid_statuses)
+        Booking.status == completed_status
     ).group_by(User.username).all()
 
     worker_data = {username: revenue or 0 for username, revenue in revenue_by_worker}
@@ -462,7 +462,7 @@ def owner_analytics(
     popular_service = db.query(
         Service.name,
         func.count(Booking.id)
-    ).join(Booking).group_by(Service.name).order_by(
+    ).join(Booking).filter(Booking.status == completed_status).group_by(Service.name).order_by(
         func.count(Booking.id).desc()
     ).first()
 
@@ -491,11 +491,16 @@ def export_bookings(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("owner"))
 ):
-    bookings = db.query(Booking).filter(
-        Booking.status.in_(("paid", "completed")),
-        Booking.start_time >= start_date,
-        Booking.start_time <= end_date
-    ).all()
+    bookings = (
+        db.query(Booking)
+        .options(joinedload(Booking.service))
+        .filter(
+            Booking.status == "completed",
+            Booking.start_time >= start_date,
+            Booking.start_time <= end_date
+        )
+        .all()
+    )
 
     headers = ["Datum", "Uhrzeit", "Kunde", "Telefon", "Dienstleistung", "Preis (€)", "Quelle"]
     rows = [
@@ -528,6 +533,103 @@ def export_bookings(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# =====================================================
+# CUSTOMERS (Kunden — группировка по email)
+# =====================================================
+@router.get("/customers")
+def owner_customers_list(
+    marketing: Optional[bool] = Query(None, description="Nur mit Marketing-Zustimmung"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    """Клиенты, сгруппированные по email: name (последний), phone (последний), total_bookings, marketing_consent, last_booking_date."""
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.email.isnot(None), Booking.email != "")
+        .order_by(Booking.start_time.desc())
+        .all()
+    )
+
+    # Группировка по email (нормализуем нижний регистр для ключа)
+    by_email = {}
+    for b in bookings:
+        key = (b.email or "").strip().lower()
+        if not key:
+            continue
+        if key not in by_email:
+            by_email[key] = {
+                "name": b.client_name,
+                "email": b.email,
+                "phone": b.phone or "",
+                "total_bookings": 0,
+                "marketing_consent": False,
+                "last_booking_date": None,
+            }
+        rec = by_email[key]
+        rec["total_bookings"] += 1
+        if b.marketing_consent:
+            rec["marketing_consent"] = True
+        if rec["last_booking_date"] is None and b.start_time:
+            rec["last_booking_date"] = b.start_time.strftime("%Y-%m-%d") if b.start_time else None
+        # Обновляем name/phone только если эта запись новее (bookings уже по убыванию start_time)
+        if b.start_time and (rec.get("_last") is None or b.start_time > rec["_last"]):
+            rec["_last"] = b.start_time
+            rec["name"] = b.client_name
+            rec["phone"] = b.phone or ""
+
+    result = []
+    for key, rec in by_email.items():
+        rec.pop("_last", None)
+        if rec["last_booking_date"] is None:
+            group_bookings = [b for b in bookings if (b.email or "").strip().lower() == key]
+            if group_bookings:
+                last_dt = max(b.start_time for b in group_bookings if b.start_time)
+                rec["last_booking_date"] = last_dt.strftime("%Y-%m-%d")
+        if marketing is True and not rec["marketing_consent"]:
+            continue
+        result.append(rec)
+    result.sort(key=lambda x: (x["last_booking_date"] or ""), reverse=True)
+    return result
+
+
+@router.get("/customers/export")
+def owner_customers_export(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    """CSV только клиентов с marketing_consent=True. Колонки: name, email."""
+    import csv
+    bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.email.isnot(None),
+            Booking.email != "",
+            Booking.marketing_consent == True,
+        )
+        .order_by(Booking.start_time.desc())
+        .all()
+    )
+    # Уникальные по email (последнее имя для этого email)
+    by_email = {}
+    for b in bookings:
+        key = (b.email or "").strip().lower()
+        if not key:
+            continue
+        if key not in by_email:
+            by_email[key] = {"name": b.client_name, "email": b.email}
+    rows = [{"name": r["name"], "email": r["email"]} for r in by_email.values()]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["name", "email"])
+    writer.writeheader()
+    writer.writerows(rows)
+    body = output.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(body),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="marketing_contacts.csv"'},
     )
 
 

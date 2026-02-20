@@ -13,12 +13,11 @@ import Dashboard from "./pages/owner/Dashboard";
 import Services from "./pages/owner/Services";
 import Workers from "./pages/owner/Workers";
 import Schedule from "./pages/owner/Schedule";
+import CustomersPage from "./pages/owner/CustomersPage";
 import Settings from "./pages/owner/Settings";
 
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
-import CompleteBookingPage from "./pages/worker/CompleteBookingPage";
 import WorkerTimePage from "./pages/worker/WorkerTimePage";
-import AbrechnungPage from "./pages/worker/AbrechnungPage";
 import OwnerWorktimePage from "./pages/owner/OwnerWorktimePage";
 
 export default function App() {
@@ -66,6 +65,14 @@ export default function App() {
               }
             />
             <Route
+              path="/owner/customers"
+              element={
+                <ProtectedRoute role="owner">
+                  <CustomersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/owner/settings"
               element={
                 <ProtectedRoute role="owner">
@@ -91,26 +98,10 @@ export default function App() {
               }
             />
             <Route
-              path="/worker/booking/:id/complete"
-              element={
-                <ProtectedRoute role="worker">
-                  <CompleteBookingPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/worker/time"
               element={
                 <ProtectedRoute role="worker">
                   <WorkerTimePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/worker/abrechnung"
-              element={
-                <ProtectedRoute role="worker">
-                  <AbrechnungPage />
                 </ProtectedRoute>
               }
             />

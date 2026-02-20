@@ -7,7 +7,7 @@ export function useBookingState() {
   const [service, setService] = useState(null);
   const [date, setDate] = useState(null);
   const [time, setTime] = useState(null);
-  const [details, setDetails] = useState({ name: "", phone: "", email: "" });
+  const [details, setDetails] = useState({ name: "", phone: "", email: "", marketing_consent: false });
 
   const currentStepName = STEPS[step];
   const canGoBack = step > 0;
@@ -30,7 +30,7 @@ export function useBookingState() {
     setService(null);
     setDate(null);
     setTime(null);
-    setDetails({ name: "", phone: "", email: "" });
+    setDetails({ name: "", phone: "", email: "", marketing_consent: false });
   }, []);
 
   const selectedDateTime =

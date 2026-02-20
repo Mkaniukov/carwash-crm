@@ -26,6 +26,7 @@ class PublicBookingRequest(BaseModel):
     email: str
     service_id: int
     start_time: datetime
+    marketing_consent: bool = False
 
 
 # =====================================================
@@ -66,7 +67,8 @@ def create_public_booking(
         service_id=data.service_id,
         start_time=data.start_time,
         source="website",
-        created_by=None
+        created_by=None,
+        marketing_consent=data.marketing_consent,
     )
 
     # 📩 Email async
@@ -94,7 +96,7 @@ def cancel_by_token(
     if not booking:
         raise HTTPException(status_code=404, detail="Invalid link")
 
-    booking.status = "canceled_by_client"
+    booking.status = "cancelled"
     db.commit()
 
     background_tasks.add_task(send_cancellation_email, booking)
@@ -127,7 +129,7 @@ def public_bookings_by_date(
     end_of_day = start_of_day + timedelta(days=1)
 
     bookings = db.query(Booking).filter(
-        Booking.status.in_(("booked", "checked_in", "confirmed")),
+        Booking.status == "booked",
         Booking.start_time >= start_of_day,
         Booking.start_time < end_of_day
     ).all()

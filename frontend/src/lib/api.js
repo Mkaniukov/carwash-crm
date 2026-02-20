@@ -90,6 +90,10 @@ export const ownerApi = {
     api.get("/owner/worktime", { params }).then((r) => r.data),
   updateWorktime: (id, body) =>
     api.put(`/owner/worktime/${id}`, body).then((r) => r.data),
+  getCustomers: (params) =>
+    api.get("/owner/customers", { params }).then((r) => r.data),
+  getCustomersExport: () =>
+    api.get("/owner/customers/export", { responseType: "blob" }).then((r) => r.data),
 };
 
 // Worker
@@ -101,24 +105,13 @@ export const workerApi = {
   createBooking: (body) => api.post("/worker/bookings", body).then((r) => r.data),
   cancelBooking: (id) =>
     api.post(`/worker/bookings/${id}/cancel`).then((r) => r.data),
-  completeBooking: (id) =>
+  markCompleted: (id) =>
     api.post(`/worker/bookings/${id}/complete`).then((r) => r.data),
-  completeBookingWithForm: (id, body) =>
-    api.post(`/worker/bookings/${id}/complete`, body).then((r) => r.data),
-  payBooking: (id, body) =>
-    api.post(`/worker/bookings/${id}/pay`, body).then((r) => r.data),
-  getAbrechnungPdf: (fromDate, toDate) =>
-    api.get("/worker/abrechnung/pdf", {
-      params: { from_date: fromDate, to_date: toDate },
-      responseType: "blob",
-    }).then((r) => r.data),
   workTimeStart: () => api.post("/worker/time/start").then((r) => r.data),
   workTimeEnd: (pauseMinutes = 0) =>
     api.post("/worker/time/end", null, { params: { pause_minutes: pauseMinutes } }).then((r) => r.data),
   workTimeList: (params) =>
     api.get("/worker/time", { params }).then((r) => r.data),
-  workTimeUpdate: (id, body) =>
-    api.put(`/worker/time/${id}`, body).then((r) => r.data),
 };
 
 export default api;
