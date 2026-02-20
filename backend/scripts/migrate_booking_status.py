@@ -12,6 +12,22 @@ from sqlalchemy import text
 from app.db.session import engine
 
 def run():
+    dialect = engine.dialect.name
+
+    # PostgreSQL: ADD VALUE нельзя внутри транзакции — выполняем в autocommit
+    if dialect == "postgresql":
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            try:
+                conn.execute(text("ALTER TYPE bookingstatus ADD VALUE IF NOT EXISTS 'cancelled'"))
+                print("Added enum value 'cancelled'.")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    print("Enum value 'cancelled' already exists.")
+                else:
+                    raise
+        import time
+        time.sleep(0.3)
+
     with engine.begin() as conn:
         # Нормализация статусов (для существующих строк)
         conn.execute(text("""
