@@ -8,7 +8,7 @@ services:
     region: frankfurt
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && python -m scripts.migrate_checkin_payment
+    buildCommand: pip install -r requirements.txt && python -m scripts.migrate_booking_status
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
