@@ -62,8 +62,12 @@ export function useAvailableSlots(date, service) {
   const availableSlots = useMemo(() => {
     if (!date || !settings) return [];
     if (!isWorkingDay(date, settings)) return [];
+    const now = new Date();
+    const bufferMinutes = 2;
+    const minStart = new Date(now.getTime() - bufferMinutes * 60 * 1000);
     return slots.filter((timeStr) => {
       const slotStart = combineDateAndTime(date, timeStr);
+      if (slotStart < minStart) return false;
       const slotEnd = addDuration(slotStart, duration);
       for (const b of bookings) {
         const bookingStart = new Date(b.start_time);

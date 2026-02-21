@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 MAIL_USERNAME = (os.getenv("MAIL_USERNAME") or "").strip()
 MAIL_PASSWORD = (os.getenv("MAIL_PASSWORD") or "").strip().replace(" ", "")
 MAIL_FROM = (os.getenv("MAIL_FROM") or os.getenv("MAIL_USERNAME") or "").strip()
-# Ссылка «Termin stornieren» ведёт на фронт; в Render задать FRONTEND_URL = URL Static Site
+# Cancel link points to frontend; set FRONTEND_URL in Render to your Static Site URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", os.getenv("DOMAIN", "http://localhost:5173"))
 
 SMTP_HOST = "smtp.gmail.com"

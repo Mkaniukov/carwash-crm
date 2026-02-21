@@ -21,7 +21,7 @@ pwd_context = CryptContext(
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-# 🔐 Хеширование
+# Password hashing
 def hash_password(password: str):
     return pwd_context.hash(password)
 
@@ -30,7 +30,7 @@ def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# 🔐 JWT создание
+# JWT creation
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -38,7 +38,7 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-# 🔐 Получение текущего пользователя
+# Get current user from token
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -58,7 +58,7 @@ def get_current_user(
     return user
 
 
-# 🔐 Проверка роли
+# Role check dependency
 def require_role(required_role: str):
     def role_checker(current_user: User = Depends(get_current_user)):
         if current_user.role != required_role:

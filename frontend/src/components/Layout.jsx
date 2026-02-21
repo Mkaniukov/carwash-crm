@@ -64,12 +64,6 @@ export default function Layout({ children, role }) {
               >
                 Einstellungen
               </Link>
-              <Link
-                className={`sidebar__link ${isActive("/owner/worktime") ? "sidebar__link--active" : ""}`}
-                to="/owner/worktime"
-              >
-                Arbeitszeit
-              </Link>
             </>
           )}
           {role === "worker" && (

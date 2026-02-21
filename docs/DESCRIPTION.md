@@ -1,115 +1,74 @@
-# Carwash CRM — описание программы
+# Carwash CRM — Product description
 
-Веб-приложение для автомойки: публичное онлайн-бронирование и две закрытые зоны — **панель владельца (админка)** и **панель сотрудника**. Интерфейс на немецком языке.
-
----
-
-## Общая схема
-
-- **Публичная часть** — клиент выбирает услугу, дату, время, вводит контакты и создаёт бронь. На e-mail приходит подтверждение со ссылкой для отмены.
-- **Владелец (Inhaber)** — полный доступ: аналитика, услуги, сотрудники, все брони, настройки, экспорт, смена пароля.
-- **Сотрудник (Mitarbeiter)** — просмотр своих бронирований на неделю и создание «ручных» записей (Walk-In).
-
-Роли различаются после входа: владелец попадает в админку (`/owner`), сотрудник — в панель сотрудника (`/worker`).
+Web app for a car wash: public online booking and two restricted areas — **owner (admin) panel** and **worker panel**. UI language: German.
 
 ---
 
-## Админка (панель владельца)
+## Overview
 
-Вход: **owner** + пароль (задаётся через переменную окружения при первом создании). После входа доступно боковое меню и пять разделов.
+- **Public part** — customer selects service, date, time, enters contacts and creates a booking. Confirmation email with cancel link is sent.
+- **Owner (Inhaber)** — full access: analytics, services, workers, all bookings, settings, export, password change.
+- **Worker (Mitarbeiter)** — view bookings for the week and create manual (Walk-In) bookings.
+
+Roles apply after login: owner goes to admin (`/owner`), worker to worker panel (`/worker`).
+
+---
+
+## Admin (owner panel)
+
+Login: **owner** + password (set via environment variable on first creation). Sidebar and sections:
 
 ### 1. Dashboard (`/owner`)
 
-- **Сводные показатели (карточки):**
-  - Umsatz heute — выручка за сегодня
-  - Umsatz diesen Monat — выручка за текущий месяц
-  - Ø Einnahmen pro Termin — средний чек
-  - Erledigte Termine — количество завершённых бронирований
-  - Alle Termine (gesamt) — всего бронирований
-  - Stornoquote — доля отмен (в %)
-- **Графики:**
-  - Umsatz nach Mitarbeiter — столбчатая диаграмма выручки по сотрудникам
-  - Umsatz nach Quelle — круговая диаграмма выручки по источникам (Website, Mitarbeiter, Telefon)
-- **Блок:** Beliebtester Service — самый часто заказываемый сервис
+- Summary cards: revenue today, revenue this month, average per booking, completed bookings count, total bookings, cancel rate.
+- Charts: revenue by worker, revenue by source (Website, Worker, Phone).
+- Most popular service.
 
-Данные считаются по завершённым бронированиям.
-
----
+Data is based on completed bookings.
 
 ### 2. Services (`/owner/services`)
 
-- **Список услуг** — название, цена, длительность (мин), описание.
-- **Действия:**
-  - Создать услугу (+ Service erstellen) — модальное окно: название, цена, длительность, описание.
-  - Редактировать — кнопка у каждой услуги, те же поля.
-  - Удалить — с подтверждением.
-- Эти же услуги отображаются на публичной странице бронирования и в панели сотрудника при создании записи.
-
----
+- List of services: name, price, duration (min), description.
+- Create, edit, delete. Same services appear on the public booking page and in the worker panel.
 
 ### 3. Mitarbeiter (`/owner/workers`)
 
-- **Список сотрудников** — логин (username), при необходимости рабочие часы и дни (если доработаны в бэкенде).
-- **Действия:**
-  - Создать сотрудника — логин и пароль. После создания сотрудник может входить в панель Mitarbeiter.
-  - Редактировать — изменить логин/пароль.
-  - Удалить — с подтверждением.
-- Сотрудники используются в фильтрах и в аналитике (выручка по сотруднику).
-
----
+- List of workers (username). Create worker (login + password), edit, delete. Workers can log in to the worker panel.
 
 ### 4. Termine (`/owner/schedule`)
 
-- **Календарь бронирований по неделям** — переключение недель (стрелки, «Сегодня»).
-- **Фильтр по сотруднику** — выбор сотрудника, отображение только его бронирований (если привязано к брони).
-- **По дням недели** — карточки с бронированиями на каждый день: клиент, услуга, время, статус.
-- **Действия по бронированию:**
-  - Stornieren — отмена брони (статус отмены).
-  - При необходимости — перенос времени (если реализовано в интерфейсе).
-- Отображаются активные брони (без отменённых или с отдельной пометкой), чтобы владелец видел актуальную сетку.
+- Week view of bookings; filter by worker. Per day: client, service, time, status. Actions: cancel, optionally reschedule.
+
+### 5. Kunden (`/owner/customers`)
+
+- Customers grouped by email: name, phone, total bookings, marketing consent, last booking date. Filter “Nur mit Marketing-Zustimmung”, Export CSV.
+
+### 6. Einstellungen (`/owner/settings`)
+
+- Öffnungszeiten (work start/end), Arbeitstage (working days). Save. Passwort ändern (change password) below.
 
 ---
 
-### 5. Einstellungen (`/owner/settings`)
+## Worker panel
 
-- **Öffnungszeiten:**
-  - Arbeitsbeginn / Arbeitsende — время начала и окончания рабочего дня (для слотов на сайте и в календаре).
-- **Arbeitstage:** выбор дней недели (Mo–So), когда мойка принимает брони.
-- **Кнопка «Speichern»** — сохранение настроек; они используются при расчёте доступных слотов на публичной странице и в логике бронирований.
-- **Passwort ändern (блок ниже):**
-  - Текущий пароль, новый пароль, подтверждение.
-  - Рекомендуется сменить пароль после первого входа (пароль больше не хранится в коде, задаётся при деплое через переменную окружения).
+- Login with worker credentials.
+- Week view of bookings; button “Erledigt” (mark completed), “Stornieren” (cancel).
+- Create manual booking: date, time, service, client name (e.g. Walk-In); saved as booking with source “worker”.
+- Arbeitszeit: start/end work time tracking.
 
 ---
 
-### Дополнительно в админке (бэкенд/экспорт)
+## Public part
 
-- **Экспорт в Excel** — по API: выгрузка завершённых бронирований за выбранный период (дата начала и конца) в формате `.xlsx` (колонки: Datum, Uhrzeit, Kunde, Telefon, Dienstleistung, Preis, Quelle). Вызов через endpoint (например, из кнопки или отдельной страницы, если она добавлена во фронт).
-
-Итого по админке: один вход (owner), пять разделов (Dashboard, Services, Mitarbeiter, Termine, Einstellungen) и возможность экспорта и смены пароля.
-
----
-
-## Панель сотрудника (кратко)
-
-- Вход: логин и пароль сотрудника, созданного владельцем.
-- **Недельный вид бронирований** — свои (или общие) записи с возможностью отмечать «Erledigt» и «Stornieren».
-- **Создание записи вручную** — выбор даты, времени, услуги, имя клиента (например, Walk-In); запись сохраняется как бронирование с источником «worker».
+- Home: step-by-step booking — service → date → time (slots from settings) → contacts (name, phone, email) → optional marketing consent → confirm.
+- After submit: success page and (if mail configured) confirmation email with cancel link.
+- Cancel link: `/cancel/:token` — cancels booking and shows “Termin storniert”.
+- Past time slots for the selected day are hidden (only future slots shown).
 
 ---
 
-## Публичная часть (кратко)
+## Tech stack
 
-- Главная страница — пошаговое бронирование: выбор услуги → дата → время (слоты по настройкам мойки) → контакты (имя, телефон, e-mail) → подтверждение.
-- После отправки — переход на страницу успеха и (при настроенной почте) письмо с подтверждением и ссылкой на отмену.
-- Ссылка отмены ведёт на страницу вида `/cancel/:token` — отмена брони и сообщение «Termin storniert».
-
----
-
-## Технологии
-
-- **Backend:** FastAPI (Python), SQLite/PostgreSQL, JWT-авторизация.
+- **Backend:** FastAPI (Python), SQLite/PostgreSQL, JWT auth.
 - **Frontend:** React (Vite), React Router, axios.
-- **Деплой:** например, Render (backend + static site + БД); переменные окружения задаются в панели Render.
-
-Это описание можно использовать как основу для README, техзадания или инструкции для владельца мойки.
+- **Deploy:** e.g. Render (backend + static site + DB); env vars set in Render dashboard.

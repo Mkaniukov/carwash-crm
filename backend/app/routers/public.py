@@ -104,7 +104,7 @@ def cancel_by_token(
     return {"message": "Booking canceled"}
 
 # =====================================================
-# PUBLIC BOOKINGS BY DATE (für Kalender)
+# PUBLIC BOOKINGS BY DATE (for calendar)
 # =====================================================
 @router.get("/bookings/by-date")
 def public_bookings_by_date(
@@ -113,7 +113,7 @@ def public_bookings_by_date(
 ):
     from datetime import datetime, timedelta
 
-    # 🔥 Безопасно берём только часть даты
+    # Safely take date part only
     try:
         date_only = date.split("T")[0]
         selected_date = datetime.strptime(date_only, "%Y-%m-%d")
@@ -143,7 +143,7 @@ def public_bookings_by_date(
     ]
 
 # =====================================================
-# PUBLIC SETTINGS (für Kalender)
+# PUBLIC SETTINGS (for calendar)
 # =====================================================
 @router.get("/settings")
 def get_public_settings(db: Session = Depends(get_db)):

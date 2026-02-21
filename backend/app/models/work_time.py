@@ -1,4 +1,4 @@
-"""Модель учёта рабочего времени сотрудника."""
+"""Worker time tracking model."""
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Numeric, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -15,7 +15,7 @@ class WorkTime(Base):
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=True)
     pause_minutes = Column(Integer, default=0, nullable=False)
-    total_hours = Column(Numeric(5, 2), nullable=True)  # вычисляется при end
+    total_hours = Column(Numeric(5, 2), nullable=True)  # computed on end
     date = Column(Date, nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

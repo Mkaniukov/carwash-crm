@@ -51,7 +51,7 @@ def create_booking(
 
 
 # =====================================================
-# LIST BOOKINGS (все записи — общий календарь с owner)
+# LIST BOOKINGS (all bookings, shared calendar with owner)
 # =====================================================
 @router.get("/bookings")
 def list_bookings(
@@ -94,7 +94,7 @@ def list_bookings(
 
 
 # =====================================================
-# CANCEL BOOKING (worker может отменить любую; email только если запись не от worker)
+# CANCEL BOOKING (worker can cancel any; email sent only if booking not from worker)
 # =====================================================
 def _do_cancel_booking(booking_id: int, db: Session, background_tasks: BackgroundTasks):
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
@@ -164,7 +164,7 @@ def get_booking(
 
 
 # =====================================================
-# MARK COMPLETED (Erledigt — только смена статуса на completed)
+# MARK COMPLETED (Erledigt — set status to completed only)
 # =====================================================
 @router.post("/bookings/{booking_id}/complete")
 def mark_booking_completed(
@@ -208,7 +208,7 @@ def update_status(
 
 
 # =====================================================
-# RESCHEDULE BOOKING (worker может переносить любую запись)
+# RESCHEDULE BOOKING (worker can reschedule any booking)
 # =====================================================
 @router.patch("/bookings/{booking_id}/reschedule")
 def reschedule_booking(
@@ -229,18 +229,18 @@ def reschedule_booking(
 
     new_end_time = new_start_time + timedelta(minutes=service.duration)
 
-    # --- Проверка дня недели ---
+    # Check weekday
     weekday = new_start_time.weekday()
     allowed_days = [int(d) for d in settings.working_days.split(",")]
 
     if weekday not in allowed_days:
         raise HTTPException(status_code=400, detail="Closed on this day")
 
-    # --- Проверка рабочего времени ---
+    # Check working hours
     if new_start_time.time() < settings.work_start or new_end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
-    # --- Проверка пересечения ---
+    # Check overlap
     active_statuses = ("booked",)
     overlap = db.query(Booking).filter(
         Booking.id != booking_id,

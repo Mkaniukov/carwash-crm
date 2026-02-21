@@ -12,5 +12,5 @@ class BusinessSettings(Base):
     work_end = Column(Time, nullable=False, default=time(18, 0))
 
     # 0=Monday ... 6=Sunday
-    # будем хранить как строку: "0,1,2,3,4"
+    # stored as string: "0,1,2,3,4" (weekday numbers)
     working_days = Column(String, nullable=False, default="0,1,2,3,4")

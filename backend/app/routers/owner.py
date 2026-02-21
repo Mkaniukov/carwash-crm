@@ -537,7 +537,7 @@ def export_bookings(
 
 
 # =====================================================
-# CUSTOMERS (Kunden — группировка по email)
+# CUSTOMERS (grouped by email)
 # =====================================================
 @router.get("/customers")
 def owner_customers_list(
@@ -545,7 +545,7 @@ def owner_customers_list(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("owner")),
 ):
-    """Клиенты, сгруппированные по email: name (последний), phone (последний), total_bookings, marketing_consent, last_booking_date."""
+    """Customers grouped by email: name (last used), phone (last), total_bookings, marketing_consent, last_booking_date."""
     bookings = (
         db.query(Booking)
         .filter(Booking.email.isnot(None), Booking.email != "")
@@ -553,7 +553,7 @@ def owner_customers_list(
         .all()
     )
 
-    # Группировка по email (нормализуем нижний регистр для ключа)
+    # Group by email (normalize to lowercase for key)
     by_email = {}
     for b in bookings:
         key = (b.email or "").strip().lower()
@@ -574,7 +574,7 @@ def owner_customers_list(
             rec["marketing_consent"] = True
         if rec["last_booking_date"] is None and b.start_time:
             rec["last_booking_date"] = b.start_time.strftime("%Y-%m-%d") if b.start_time else None
-        # Обновляем name/phone только если эта запись новее (bookings уже по убыванию start_time)
+        # Update name/phone only if this booking is newer (bookings already ordered by start_time desc)
         if b.start_time and (rec.get("_last") is None or b.start_time > rec["_last"]):
             rec["_last"] = b.start_time
             rec["name"] = b.client_name
@@ -600,7 +600,7 @@ def owner_customers_export(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("owner")),
 ):
-    """CSV только клиентов с marketing_consent=True. Колонки: name, email."""
+    """CSV of customers with marketing_consent=True. Columns: name, email."""
     import csv
     bookings = (
         db.query(Booking)
@@ -612,7 +612,7 @@ def owner_customers_export(
         .order_by(Booking.start_time.desc())
         .all()
     )
-    # Уникальные по email (последнее имя для этого email)
+    # Unique by email (keep latest name per email)
     by_email = {}
     for b in bookings:
         key = (b.email or "").strip().lower()
@@ -634,7 +634,7 @@ def owner_customers_export(
 
 
 # =====================================================
-# WORK TIME (учёт рабочего времени по сотрудникам)
+# WORK TIME (worker time tracking)
 # =====================================================
 class WorkTimeUpdateBody(BaseModel):
     start_time: Optional[str] = None

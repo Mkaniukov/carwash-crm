@@ -8,39 +8,38 @@ from app.core.security import hash_password
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# 🔹 Проверка SECRET_KEY в production
+# Check SECRET_KEY in production
 if os.getenv("DATABASE_URL", "").startswith("postgres"):
     sk = os.getenv("SECRET_KEY", "")
     if not sk or sk == "supersecretkey":
         log.warning("SECRET_KEY is default or missing in production. Set SECRET_KEY in Render Environment.")
 
-# 🔹 Создаём приложение
+# Create app
 app = FastAPI(title="Carwash CRM")
 
-# 🔹 Импорт БД
+# DB import
 from app.db.session import engine, Base, SessionLocal
 
-# 🔹 Импорт всех моделей ДО create_all
+# Import all models BEFORE create_all
 from app.models.user import User
 from app.models.booking import Booking
 from app.models.service import Service
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
 
-# 🔹 Импорт роутеров
+# Import routers
 from app.routers.auth import router as auth_router
 from app.routers.owner import router as owner_router
 from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
-# 🔹 CORS (localhost + фронт на Render)
-# CORS_ORIGINS через запятую в env. Явно добавляем фронт на Render, чтобы точно не блокировать.
+# CORS (localhost + frontend on Render). CORS_ORIGINS from env (comma-separated).
 _cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173").strip()
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 if "https://carwash-crm-web.onrender.com" not in _cors_origins:
     _cors_origins.append("https://carwash-crm-web.onrender.com")
 
-# Добавляем CORS ко всем ответам (в т.ч. при 500/4xx), чтобы браузер не блокировал
+# Add CORS to all responses (including 500/4xx) so browser does not block
 def _cors_origin_allowed(origin: str) -> bool:
     if not origin:
         return False
@@ -70,16 +69,16 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# 🔥 ВАЖНО — create_all должен быть после импорта моделей
+# IMPORTANT: create_all must run after model imports
 Base.metadata.create_all(bind=engine)
 
-# 🔹 Подключаем роутеры
+# Include routers
 app.include_router(auth_router)
 app.include_router(owner_router)
 app.include_router(worker_router)
 app.include_router(public_router)
 
-# 🔹 При 500 всё равно отдаём ответ с CORS, чтобы в логах Render была видна ошибка
+# On 500 still return CORS so Render logs show the error
 @app.exception_handler(Exception)
 def catch_all_exception_handler(request, exc):
     import traceback
@@ -91,13 +90,13 @@ def catch_all_exception_handler(request, exc):
     )
 
 
-# 🔹 Проверочный endpoint
+# Root/health endpoint
 @app.get("/")
 def root():
     return {"status": "CRM backend running"}
 
 
-# 🔹 Диагностика для деплоя (owner/services созданы?)
+# Deploy diagnostics (owner/services exist?)
 @app.get("/public/health")
 def health_check():
     from app.db.session import SessionLocal
@@ -114,7 +113,7 @@ def health_check():
         db.close()
 
 
-# 🔹 Создание первого OWNER при старте (пароль из OWNER_INITIAL_PASSWORD)
+# Create first OWNER on startup (password from OWNER_INITIAL_PASSWORD)
 @app.on_event("startup")
 def create_owner():
     log.info("Startup: create_owner running")
@@ -124,7 +123,7 @@ def create_owner():
         if existing:
             log.info("Owner already exists")
             return
-        # Production (PostgreSQL): пароль только из env. Локально (SQLite): по умолчанию admin123
+        # Production (PostgreSQL): password from env only. Local (SQLite): default admin123
         is_production = os.getenv("DATABASE_URL", "").startswith("postgres")
         password = os.getenv("OWNER_INITIAL_PASSWORD", "").strip()
         if is_production and not password:
@@ -168,7 +167,7 @@ def create_default_settings():
         db.close()
 
 
-# Сервисы по умолчанию (если БД пустая — например после деплоя на Render)
+# Default services when DB is empty (e.g. after deploy on Render)
 DEFAULT_SERVICES = [
     {"name": "CAR SPA®", "price": 24, "duration": 30, "description": "Schnelle, günstige und schonende textile Außenwäsche. Manuelle Vorreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelles Trocknen."},
     {"name": "CAR SOFT", "price": 36, "duration": 30, "description": "Intensive, schonende textile Außenwäsche mit Felgenreinigung extra. Manuelle Vorreinigung – händische Felgenreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelle Trocknung & zusätzliche manuelle Nachtrocknung."},

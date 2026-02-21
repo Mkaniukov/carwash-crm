@@ -1,88 +1,71 @@
-# План: откат сложной логики + DSGVO + Kunden
+# Plan: rollback complex logic + DSGVO + Kunden
 
-## ЧАСТЬ 1 — ОТКАТ
+## PART 1 — ROLLBACK
 
-### 1.1 Backend — удалить
-- **Модели:** `app/models/checkin_form.py`, `app/models/payment.py`
-- **Сервисы:** `app/services/pdf_service.py`, `app/services/google_integration.py`, `app/services/checkin_flow.py`
-- **Схемы:** `app/schemas/checkin.py`
-- **Скрипт:** `scripts/migrate_checkin_payment.py` (или заменить на DROP таблиц)
-- **requirements.txt:** убрать `reportlab`
+### 1.1 Backend — remove
+- **Models:** `app/models/checkin_form.py`, `app/models/payment.py`
+- **Services:** `app/services/pdf_service.py`, `app/services/google_integration.py`, `app/services/checkin_flow.py`
+- **Schemas:** `app/schemas/checkin.py`
+- **Script:** `scripts/migrate_checkin_payment.py` (or replace with DROP tables)
+- **requirements.txt:** remove `reportlab`
 
 ### 1.2 Booking.status
-- Enum: только `booked`, `completed`, `cancelled`
-- Логика: booked → completed (кнопка "Erledigt"), booked → cancelled
-- В коде: везде заменить проверки на эти три статуса; overlap = только `booked`
+- Enum: only `booked`, `completed`, `cancelled`
+- Logic: booked → completed (button "Erledigt"), booked → cancelled
+- In code: use these three statuses everywhere; overlap = only `booked`
 
 ### 1.3 main.py
-- Убрать импорты CheckInForm, Payment
-- create_all без этих моделей (таблицы в БД не удалятся автоматически — оставить или добавить скрипт DROP)
+- Remove CheckInForm, Payment imports
+- create_all without those models (DB tables not auto-dropped — use migration script)
 
 ### 1.4 worker.py
-- Убрать импорты CheckInForm, Payment, checkin-схемы
-- Удалить: POST `/bookings/:id/complete` (форма), POST `/bookings/:id/pay`, GET `/abrechnung/pdf`
-- Удалить: WorkTimeUpdateBody, PUT `/time/:id`
-- Добавить: PATCH или POST `/bookings/:id/complete` — только установка status=completed (без формы)
-- Упростить: list_bookings (без checkin_form, final_price), get_booking (без проверок на checked_in/paid)
-- Overlap/reschedule: status == "booked"
-- Cancel: status = "cancelled"
+- Remove CheckInForm, Payment, checkin schema imports
+- Remove: POST `/bookings/:id/complete` (form), POST `/bookings/:id/pay`, GET `/abrechnung/pdf`
+- Remove: WorkTimeUpdateBody, PUT `/time/:id`
+- Add: POST `/bookings/:id/complete` — set status=completed only (no form)
+- Simplify: list_bookings, get_booking; overlap/reschedule: status == "booked"; cancel: "cancelled"
 
 ### 1.5 owner.py
-- Overlap: только "booked"
-- Analytics: считать completed по status == "completed"; упростить до количества записей
-- Export: фильтр status == "completed"
-- Удалить: PUT `/worktime/:id`
+- Overlap: only "booked"; analytics/export: status == "completed"
+- Remove: PUT `/worktime/:id` for owner
 
 ### 1.6 public.py
-- by-date: статус "booked"
-- cancel: status = "cancelled"
-- PublicBookingRequest: позже добавить marketing_consent (Часть 2)
+- by-date: status "booked"; cancel: "cancelled"; add marketing_consent (Part 2)
 
 ### 1.7 booking_service
-- active_statuses для overlap: только "booked"
-- Позже добавить параметры marketing_consent (Часть 2)
+- active_statuses for overlap: only "booked"; add marketing_consent (Part 2)
 
 ### 1.8 Frontend
-- Удалить: CompleteBookingPage.jsx, AbrechnungPage.jsx
-- Удалить роуты: `/worker/booking/:id/complete`, `/worker/abrechnung`
-- Layout: убрать ссылку "Zur Abrechnung"
-- WorkerDashboard: один список бронирований, кнопка "Erledigt" (без модалки оплаты и без перехода на форму)
-- api.js: убрать completeBookingWithForm, payBooking, getAbrechnungPdf, workTimeUpdate; добавить markCompleted(id)
-- Owner: убрать updateWorktime; Worktime-страницы оставить только список (без редактирования)
-- Owner Dashboard: простая статистика (количество)
+- Remove: CompleteBookingPage, AbrechnungPage, routes, "Zur Abrechnung" link
+- WorkerDashboard: single "Erledigt" button; api: markCompleted(id)
+- Owner: no worktime menu (removed)
 
-### 1.9 БД
-- Таблицы checkin_forms, payments не создаются при следующем деплое (модели удалены). Для очистки — отдельный скрипт DROP (опционально).
+### 1.9 DB
+- Tables checkin_forms, payments dropped by migration script.
 
 ---
 
-## ЧАСТЬ 2 — MARKETING CONSENT (DSGVO)
+## PART 2 — MARKETING CONSENT (DSGVO)
 
-- Booking: поля `marketing_consent` (Boolean, default False), `marketing_consent_at` (DateTime, nullable)
-- create_booking_logic: параметры marketing_consent, marketing_consent_at; записывать в Booking
-- PublicBookingRequest: marketing_consent: Optional[bool] = False
-- Публичная страница бронирования: чекбокс (не отмечен по умолчанию), текст про Aktionen/Angebote и Widerruf
-
----
-
-## ЧАСТЬ 3 — GET /owner/customers
-
-- Группировка по email (или по email+phone как ключ? По заданию — по email)
-- Поля: name (последнее имя), email, phone (последний), total_bookings, marketing_consent (True если хотя бы одно согласие), last_booking_date
-- Фильтр ?marketing=true — только с согласием
+- Booking: `marketing_consent` (Boolean, default False), `marketing_consent_at` (DateTime, nullable)
+- create_booking_logic and PublicBookingRequest: marketing_consent
+- Public booking page: optional checkbox (Aktionen/Angebote, Widerruf text)
 
 ---
 
-## ЧАСТЬ 4 — GET /owner/customers/export
+## PART 3 — GET /owner/customers
 
-- Только marketing_consent=True
-- CSV: name,email
-- Content-Disposition: attachment; filename="marketing_contacts.csv"
+- Group by email. Fields: name (last), email, phone (last), total_bookings, marketing_consent, last_booking_date
+- Query ?marketing=true — only with consent
 
 ---
 
-## ЧАСТЬ 5 — Frontend /owner/customers
+## PART 4 — GET /owner/customers/export
 
-- Страница Kunden: таблица (Name, Email, Telefon, Termine, Marketing, Letzter Termin)
-- Фильтр "Nur mit Marketing-Zustimmung"
-- Кнопка "Export CSV"
+- Only marketing_consent=True. CSV: name, email. Content-Disposition: attachment; filename="marketing_contacts.csv"
+
+---
+
+## PART 5 — Frontend /owner/customers
+
+- Kunden page: table (Name, Email, Telefon, Termine, Marketing, Letzter Termin), filter "Nur mit Marketing-Zustimmung", button "Export CSV"

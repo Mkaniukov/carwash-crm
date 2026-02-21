@@ -9,5 +9,5 @@ class Service(Base):
 
     name = Column(String, nullable=False)
     price = Column(Integer, nullable=False)
-    duration = Column(Integer, nullable=False)  # в минутах
+    duration = Column(Integer, nullable=False)  # minutes
     description = Column(String, nullable=True)

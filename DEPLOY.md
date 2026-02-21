@@ -1,106 +1,106 @@
-# Деплой Carwash CRM: Git + Render
+# Carwash CRM: Deploy with Git + Render
 
-## 1. Git — первый коммит и пуш
+## 1. Git — first commit and push
 
-В корне проекта выполните:
+From the project root:
 
 ```bash
-cd "c:\Users\mkani\OneDrive\Документы\ELBL\carwash_crm"
+cd /path/to/carwash_crm
 
 git init
 git add .
 git commit -m "Carwash CRM: initial commit"
 ```
 
-Создайте репозиторий на GitHub (или GitLab):
+Create a repository on GitHub (or GitLab):
 
-- Зайдите на https://github.com/new
-- Имя: `carwash-crm` (или любое)
-- Не добавляйте README, .gitignore — они уже в проекте
-- Создайте репозиторий
+- Go to https://github.com/new
+- Name: `carwash-crm` (or any)
+- Do not add README or .gitignore — they are already in the project
+- Create the repository
 
-Подключите remote и запушьте:
+Add remote and push:
 
 ```bash
-git remote add origin https://github.com/ВАШ_ЛОГИН/carwash-crm.git
+git remote add origin https://github.com/YOUR_USERNAME/carwash-crm.git
 git branch -M main
 git push -u origin main
 ```
 
-(Замените `ВАШ_ЛОГИН` и имя репозитория на свои.)
+(Replace `YOUR_USERNAME` and repo name as needed.)
 
 ---
 
-## 2. Render — деплой по Blueprint
+## 2. Render — deploy via Blueprint
 
-1. Зайдите на https://render.com и войдите (или зарегистрируйтесь).
+1. Go to https://render.com and sign in (or register).
 2. **Dashboard** → **New** → **Blueprint**.
-3. Подключите репозиторий (GitHub/GitLab) и выберите `carwash-crm`.
-4. Render подхватит `render.yaml` и создаст:
+3. Connect your repository (GitHub/GitLab) and select `carwash-crm`.
+4. Render will read `render.yaml` and create:
    - **PostgreSQL** (carwash-crm-db)
    - **Web Service** (backend API)
    - **Static Site** (frontend)
-5. Перед **Apply** задайте переменные:
-   - Для **carwash-crm-api** (backend):
-     - `SECRET_KEY` — длинная случайная строка (в Render: Generate).
-     - **`OWNER_INITIAL_PASSWORD`** — пароль для первого входа владельца (логин: **owner**). Задайте свой пароль; в коде пароль не хранится.
-     - `FRONTEND_URL` = `https://carwash-crm-web.onrender.com` — URL фронта; по нему в E-Mails строится ссылка «Termin stornieren».
-     - `CORS_ORIGINS` = `https://carwash-crm-web.onrender.com` (опционально; для *.onrender.com уже разрешено).
-     - Для E-Mails (Bestätigung/Storno): `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (z. B. Gmail-App-Passwort).
-   - Для **carwash-crm-web** (frontend):
-     - `VITE_API_URL` = `https://carwash-crm-api.onrender.com` (URL вашего backend; muss mit `http://` oder `https://` beginnen).
-6. Нажмите **Apply** и дождитесь деплоя.
+5. Before **Apply**, set environment variables:
+   - For **carwash-crm-api** (backend):
+     - `SECRET_KEY` — long random string (use Generate in Render).
+     - **`OWNER_INITIAL_PASSWORD`** — password for first owner login (username: **owner**). Set your own; not stored in code.
+     - `FRONTEND_URL` = `https://carwash-crm-web.onrender.com` — frontend URL; used in emails for the “Termin stornieren” (cancel) link.
+     - `CORS_ORIGINS` = `https://carwash-crm-web.onrender.com` (optional; *.onrender.com is already allowed).
+     - For emails (confirmation/cancellation): `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (e.g. Gmail app password).
+   - For **carwash-crm-web** (frontend):
+     - `VITE_API_URL` = `https://carwash-crm-api.onrender.com` (your backend URL; must start with `http://` or `https://`).
+6. Click **Apply** and wait for the deploy.
 
-После первого деплоя:
+After the first deploy:
 
-- Откройте вкладку **carwash-crm-web** и скопируйте URL (например `https://carwash-crm-web.onrender.com`).
-- В **carwash-crm-api** в **Environment** добавьте/измените `CORS_ORIGINS` на этот URL.
-- Сохраните и при необходимости передеплойте API.
+- Open the **carwash-crm-web** tab and copy its URL (e.g. `https://carwash-crm-web.onrender.com`).
+- In **carwash-crm-api** → **Environment**, set or update `CORS_ORIGINS` to that URL.
+- Save and redeploy the API if needed.
 
-### Обязательно: SPA Rewrite (чтобы работали /login и другие страницы)
+### Required: SPA Rewrite (for /login and other routes)
 
-Без этого при прямом заходе на https://carwash-crm-web.onrender.com/login будет **Not Found**.
+Without this, visiting https://carwash-crm-web.onrender.com/login directly returns **Not Found**.
 
-1. В **Dashboard** откройте сервис **carwash-crm-web** (Static Site).
-2. Слева выберите **Redirects/Rewrites**.
-3. Нажмите **Add Rule** и задайте:
+1. In **Dashboard**, open **carwash-crm-web** (Static Site).
+2. Go to **Redirects/Rewrites**.
+3. **Add Rule**:
    - **Source Path:** `/*`
    - **Destination Path:** `/index.html`
-   - **Action:** **Rewrite** (не Redirect).
-4. Сохраните. После этого `/login`, `/owner` и т.д. будут открываться.
+   - **Action:** **Rewrite** (not Redirect).
+4. Save. Then `/login`, `/owner`, etc. will work.
 
 ---
 
-## 3. Без Blueprint (ручная настройка)
+## 3. Without Blueprint (manual setup)
 
 ### Backend (Web Service)
 
 - **New** → **Web Service**
-- Репозиторий: ваш `carwash-crm`
+- Repository: your `carwash-crm`
 - **Root Directory:** `backend`
 - **Runtime:** Python
-- **Build Command:** `pip install -r requirements.txt`
+- **Build Command:** `pip install -r requirements.txt && python -m scripts.migrate_booking_status`
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - **Environment:**
-  - Добавьте **PostgreSQL** (Create New Database), Render подставит `DATABASE_URL`
-  - `SECRET_KEY` — любая длинная строка (или Generate)
-  - `OWNER_INITIAL_PASSWORD` — пароль для первого входа (логин owner)
-  - `CORS_ORIGINS` = URL вашего frontend на Render (после его создания)
+  - Add **PostgreSQL** (Create New Database); Render will set `DATABASE_URL`
+  - `SECRET_KEY` — long random string (or Generate)
+  - `OWNER_INITIAL_PASSWORD` — password for first login (username: owner)
+  - `CORS_ORIGINS` = your frontend URL on Render (after creating it)
 
 ### Frontend (Static Site)
 
 - **New** → **Static Site**
-- Репозиторий: ваш `carwash-crm`
+- Repository: your `carwash-crm`
 - **Root Directory:** `frontend`
 - **Build Command:** `npm install && npm run build`
 - **Publish Directory:** `dist`
-- **Environment:** `VITE_API_URL` = URL backend (например `https://carwash-crm-api.onrender.com`)
+- **Environment:** `VITE_API_URL` = backend URL (e.g. `https://carwash-crm-api.onrender.com`)
 
 ---
 
-## 4. После деплоя
+## 4. After deploy
 
-- Логин владельца: **owner** / пароль из переменной **OWNER_INITIAL_PASSWORD** (задана в Render). Рекомендуется сменить пароль в Einstellungen → Passwort ändern.
-- Ссылка «Termin stornieren» в E-Mails ведёт на `FRONTEND_URL/cancel/TOKEN` (Seite «Termin storniert»).
-- На Render Free план сервисы «засыпают» после неактивности; первый запрос может идти 30–60 Sekunden.
-- Wenn **keine Services** auf der Startseite: **Manual Deploy** bei **carwash-crm-api** ausführen (Backend seedet beim Start, wenn DB leer).
+- Owner login: **owner** / password from **OWNER_INITIAL_PASSWORD** (set in Render). Change it in Einstellungen → Passwort ändern.
+- The “Termin stornieren” link in emails goes to `FRONTEND_URL/cancel/TOKEN` (cancel page).
+- On Render Free tier, services spin down when idle; the first request may take 30–60 seconds.
+- If **no services** appear on the start page: run **Manual Deploy** on **carwash-crm-api** (backend seeds default services on startup when DB is empty).

@@ -27,32 +27,32 @@ def create_booking_logic(
     if not settings:
         raise HTTPException(status_code=500, detail="Business settings not configured")
 
-    # 🔥 ВАЖНО: убираем timezone (FastAPI делает UTC aware)
+    # Strip timezone (FastAPI may pass UTC-aware)
     if start_time.tzinfo is not None:
         start_time = start_time.replace(tzinfo=None)
 
     if start_time < datetime.utcnow() - timedelta(minutes=2):
         raise HTTPException(status_code=400, detail="Start time must be in the future")
 
-    # рассчитываем окончание
+    # Compute end time
     end_time = start_time + timedelta(minutes=service.duration)
 
-    # 🔥 тоже убираем tzinfo если вдруг есть
+    # Strip tzinfo from end_time if present
     if end_time.tzinfo is not None:
         end_time = end_time.replace(tzinfo=None)
 
-    # --- Проверка дня недели ---
+    # Check weekday
     weekday = start_time.weekday()
     allowed_days = [int(d) for d in settings.working_days.split(",")]
 
     if weekday not in allowed_days:
         raise HTTPException(status_code=400, detail="Closed on this day")
 
-    # --- Проверка рабочего времени ---
+    # Check working hours
     if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
-    # --- Проверка пересечения (слот блокируется при booked) ---
+    # Check overlap (slot blocked when status is booked)
     active_statuses = ("booked",)
     overlap = db.query(Booking).filter(
         Booking.status.in_(active_statuses),

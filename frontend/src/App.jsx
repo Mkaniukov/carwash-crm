@@ -18,7 +18,6 @@ import Settings from "./pages/owner/Settings";
 
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
 import WorkerTimePage from "./pages/worker/WorkerTimePage";
-import OwnerWorktimePage from "./pages/owner/OwnerWorktimePage";
 
 export default function App() {
   return (
@@ -80,15 +79,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/owner/worktime"
-              element={
-                <ProtectedRoute role="owner">
-                  <OwnerWorktimePage />
-                </ProtectedRoute>
-              }
-            />
-
             <Route
               path="/worker"
               element={
