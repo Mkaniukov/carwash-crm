@@ -112,6 +112,8 @@ export const workerApi = {
     api.post("/worker/time/end", null, { params: { pause_minutes: pauseMinutes } }).then((r) => r.data),
   workTimeList: (params) =>
     api.get("/worker/time", { params }).then((r) => r.data),
+  workTimeUpdate: (id, body) =>
+    api.put(`/worker/time/${id}`, body).then((r) => r.data),
 };
 
 export default api;

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Body
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.db.session import get_db
@@ -334,6 +334,65 @@ def work_time_end(
     wt.total_hours = round(max(0, delta), 2)
     db.commit()
     return {"message": "Arbeitsende", "total_hours": float(wt.total_hours)}
+
+
+class WorkTimeUpdateBody(BaseModel):
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    pause_minutes: Optional[int] = Field(None, ge=0, le=480)
+
+
+def _parse_dt(s: str | None):
+    if not s:
+        return None
+    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def _recalc_total_hours(start: datetime, end: datetime | None, pause_minutes: int):
+    if end is None:
+        return None
+    if end < start:
+        raise HTTPException(status_code=400, detail="end_time must be >= start_time")
+    delta = (end - start).total_seconds() / 3600 - (pause_minutes / 60)
+    return round(max(0, delta), 2)
+
+
+@router.put("/time/{time_id}")
+def work_time_update(
+    time_id: int,
+    body: WorkTimeUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    """Worker can edit only their own work time records. total_hours recalculated on backend."""
+    wt = db.query(WorkTime).filter(WorkTime.id == time_id).first()
+    if not wt:
+        raise HTTPException(status_code=404, detail="Work time record not found")
+    if wt.worker_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only edit own work time")
+    start = _parse_dt(body.start_time) if body.start_time else wt.start_time
+    end = wt.end_time
+    if body.end_time is not None:
+        if isinstance(body.end_time, str) and body.end_time.strip() == "":
+            end = None
+        else:
+            end = _parse_dt(body.end_time) if body.end_time else end
+    pause = body.pause_minutes if body.pause_minutes is not None else wt.pause_minutes
+    wt.start_time = start
+    wt.end_time = end
+    wt.pause_minutes = pause
+    wt.total_hours = _recalc_total_hours(start, end, pause)
+    db.commit()
+    db.refresh(wt)
+    return {
+        "id": wt.id,
+        "date": wt.date.isoformat(),
+        "start_time": wt.start_time.isoformat(),
+        "end_time": wt.end_time.isoformat() if wt.end_time else None,
+        "pause_minutes": wt.pause_minutes,
+        "total_hours": float(wt.total_hours) if wt.total_hours is not None else None,
+    }
 
 
 @router.get("/time")

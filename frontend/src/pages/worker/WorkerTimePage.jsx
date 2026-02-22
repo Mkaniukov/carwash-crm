@@ -93,7 +93,7 @@ export default function WorkerTimePage() {
     try {
       await workerApi.workTimeUpdate(editEntry.id, {
         start_time: start,
-        end_time: end || undefined,
+        end_time: end === "" ? "" : end || undefined,
         pause_minutes: Number.isNaN(pause) ? undefined : pause,
       });
       toast.success("Eintrag aktualisiert.");
@@ -187,13 +187,17 @@ export default function WorkerTimePage() {
         {editEntry && (
           <div className="checkin-form__row">
             <Input
-              label="Beginn (HH:mm)"
+              label="Beginn (HH:mm, 15-Min-Schritt)"
+              type="time"
+              step="900"
               value={editForm.start_time}
               onChange={(e) => setEditForm((f) => ({ ...f, start_time: e.target.value }))}
               placeholder="09:00"
             />
             <Input
               label="Ende (HH:mm, leer = offen)"
+              type="time"
+              step="900"
               value={editForm.end_time}
               onChange={(e) => setEditForm((f) => ({ ...f, end_time: e.target.value }))}
               placeholder="17:00"
