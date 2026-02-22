@@ -19,7 +19,8 @@ def login(
 
     token = create_access_token({
         "user_id": user.id,
-        "role": user.role
+        "role": user.role,
+        "username": user.username,
     })
 
     return {"access_token": token, "token_type": "bearer"}

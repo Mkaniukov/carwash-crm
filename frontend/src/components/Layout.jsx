@@ -6,7 +6,7 @@ import { de } from "date-fns/locale";
 export default function Layout({ children, role }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const isActive = (path) => location.pathname === path;
 
@@ -59,6 +59,12 @@ export default function Layout({ children, role }) {
                 Kunden
               </Link>
               <Link
+                className={`sidebar__link ${isActive("/owner/worktime") ? "sidebar__link--active" : ""}`}
+                to="/owner/worktime"
+              >
+                Arbeitszeittabelle
+              </Link>
+              <Link
                 className={`sidebar__link ${isActive("/owner/settings") ? "sidebar__link--active" : ""}`}
                 to="/owner/settings"
               >
@@ -101,7 +107,7 @@ export default function Layout({ children, role }) {
           <time dateTime={new Date().toISOString()}>
             {format(new Date(), "EEEE, d. MMMM yyyy", { locale: de })}
           </time>
-          <span>Willkommen</span>
+          <span>{user?.username ? `Willkommen, ${user.username}` : "Willkommen"}</span>
         </header>
         <main className="main-content">{children}</main>
       </div>

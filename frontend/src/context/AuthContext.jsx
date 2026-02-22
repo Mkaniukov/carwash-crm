@@ -10,7 +10,8 @@ function parseUserFromToken(token) {
     const payload = JSON.parse(atob(parts[1]));
     const role = payload.role || (payload.role === "" ? "" : null);
     if (role == null) return null;
-    return { role, token };
+    const username = payload.username || null;
+    return { role, username, token };
   } catch {
     return null;
   }

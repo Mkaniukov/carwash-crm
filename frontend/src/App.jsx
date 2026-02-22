@@ -14,6 +14,7 @@ import Services from "./pages/owner/Services";
 import Workers from "./pages/owner/Workers";
 import Schedule from "./pages/owner/Schedule";
 import CustomersPage from "./pages/owner/CustomersPage";
+import OwnerWorktimePage from "./pages/owner/OwnerWorktimePage";
 import Settings from "./pages/owner/Settings";
 
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
@@ -68,6 +69,14 @@ export default function App() {
               element={
                 <ProtectedRoute role="owner">
                   <CustomersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/owner/worktime"
+              element={
+                <ProtectedRoute role="owner">
+                  <OwnerWorktimePage />
                 </ProtectedRoute>
               }
             />
