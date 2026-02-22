@@ -46,8 +46,8 @@ export default function CustomersPage() {
 
   return (
     <Layout role="owner">
-      <div className="page-header" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, marginBottom: 16 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Kunden</h1>
+      <div className="page-header">
+        <h1 className="page-title">Kunden</h1>
         <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
           <input
             type="checkbox"
@@ -64,8 +64,8 @@ export default function CustomersPage() {
       {loading ? (
         <Card><p className="text-muted">Lade Kunden…</p></Card>
       ) : (
-        <Card>
-          <div className="table-wrapper" style={{ overflowX: "auto" }}>
+        <Card padding={false}>
+          <div className="table-wrapper">
             <table className="table">
               <thead>
                 <tr>

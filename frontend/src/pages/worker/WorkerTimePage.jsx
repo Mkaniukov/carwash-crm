@@ -143,8 +143,9 @@ export default function WorkerTimePage() {
       ) : entries.length === 0 ? (
         <Card><p className="text-muted">Keine Einträge für diesen Monat.</p></Card>
       ) : (
-        <Card>
-          <table className="worktime-table">
+        <Card padding={false}>
+          <div className="table-wrapper">
+            <table className="worktime-table">
             <thead>
               <tr>
                 <th>Datum</th>
@@ -169,7 +170,8 @@ export default function WorkerTimePage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </Card>
       )}
 

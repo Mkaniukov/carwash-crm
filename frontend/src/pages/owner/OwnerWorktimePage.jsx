@@ -131,8 +131,9 @@ export default function OwnerWorktimePage() {
       ) : entries.length === 0 ? (
         <Card><p className="text-muted">Keine Einträge.</p></Card>
       ) : (
-        <Card>
-          <table className="worktime-table">
+        <Card padding={false}>
+          <div className="table-wrapper">
+            <table className="worktime-table">
             <thead>
               <tr>
                 <th>Mitarbeiter</th>
@@ -159,7 +160,8 @@ export default function OwnerWorktimePage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </Card>
       )}
 
