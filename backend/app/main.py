@@ -78,16 +78,31 @@ app.include_router(owner_router)
 app.include_router(worker_router)
 app.include_router(public_router)
 
-# On 500 still return CORS so Render logs show the error
+# On 500 still return CORS so browser gets Allow-Origin (exception handler runs outside middleware)
+def _cors_headers_for_request(request) -> dict:
+    origin = request.headers.get("origin", "")
+    h = {
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "*, Authorization, Content-Type",
+    }
+    if _cors_origin_allowed(origin):
+        h["Access-Control-Allow-Origin"] = origin
+        h["Access-Control-Allow-Credentials"] = "true"
+    return h
+
+
 @app.exception_handler(Exception)
 def catch_all_exception_handler(request, exc):
     import traceback
     log.exception("Unhandled exception: %s\n%s", exc, traceback.format_exc())
     from fastapi.responses import JSONResponse
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "type": type(exc).__name__},
     )
+    for k, v in _cors_headers_for_request(request).items():
+        resp.headers[k] = v
+    return resp
 
 
 # Root/health endpoint
@@ -165,6 +180,23 @@ def create_default_settings():
         log.exception("Settings creation failed: %s", e)
     finally:
         db.close()
+
+
+@app.on_event("startup")
+def ensure_notification_emails_column():
+    """Add notification_emails to business_settings if missing (auto-migration on deploy)."""
+    from sqlalchemy import text
+    try:
+        dialect = engine.dialect.name
+        stmt = "ALTER TABLE business_settings ADD COLUMN notification_emails TEXT DEFAULT '[]' NOT NULL"
+        with engine.begin() as conn:
+            conn.execute(text(stmt))
+        log.info("Added column business_settings.notification_emails")
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "already exists" in str(e).lower():
+            log.debug("Column notification_emails already exists")
+        else:
+            log.warning("ensure_notification_emails_column: %s", e)
 
 
 # Default services when DB is empty (e.g. after deploy on Render)
