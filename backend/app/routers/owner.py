@@ -16,7 +16,7 @@ from app.models.service import Service
 from app.models.booking import Booking, BookingSource
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
-from app.services.email_service import send_cancellation_email
+from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
 
 router = APIRouter(prefix="/owner", tags=["owner"])
 
@@ -361,6 +361,31 @@ def owner_reschedule_booking(
 # =====================================================
 # SETTINGS
 # =====================================================
+def _settings_to_response(settings: BusinessSettings) -> dict:
+    import json
+    out = {
+        "id": settings.id,
+        "work_start": settings.work_start,
+        "work_end": settings.work_end,
+        "working_days": settings.working_days,
+    }
+    raw = getattr(settings, "notification_emails", None) or "[]"
+    try:
+        out["notification_emails"] = json.loads(raw) if isinstance(raw, str) else (raw or [])
+    except Exception:
+        out["notification_emails"] = []
+    if not isinstance(out["notification_emails"], list):
+        out["notification_emails"] = []
+    return out
+
+
+class UpdateSettingsBody(BaseModel):
+    work_start: Optional[str] = None
+    work_end: Optional[str] = None
+    working_days: Optional[str] = None
+    notification_emails: Optional[list[str]] = None
+
+
 @router.get("/settings")
 def get_settings(
     db: Session = Depends(get_db),
@@ -378,14 +403,12 @@ def get_settings(
         db.commit()
         db.refresh(settings)
 
-    return settings
+    return _settings_to_response(settings)
 
 
 @router.patch("/settings")
 def update_settings(
-    work_start: time,
-    work_end: time,
-    working_days: str,
+    body: UpdateSettingsBody,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("owner"))
 ):
@@ -394,15 +417,29 @@ def update_settings(
     if not settings:
         settings = BusinessSettings()
 
-    settings.work_start = work_start
-    settings.work_end = work_end
-    settings.working_days = working_days or "0,1,2,3,4"
+    if body.work_start is not None:
+        if isinstance(body.work_start, str) and ":" in body.work_start:
+            parts = body.work_start.strip().split(":")
+            settings.work_start = time(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+        else:
+            settings.work_start = body.work_start
+    if body.work_end is not None:
+        if isinstance(body.work_end, str) and ":" in body.work_end:
+            parts = body.work_end.strip().split(":")
+            settings.work_end = time(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+        else:
+            settings.work_end = body.work_end
+    if body.working_days is not None:
+        settings.working_days = body.working_days or "0,1,2,3,4"
+    if body.notification_emails is not None:
+        import json
+        settings.notification_emails = json.dumps([e.strip() for e in body.notification_emails if isinstance(e, str) and e.strip()])
 
     db.add(settings)
     db.commit()
     db.refresh(settings)
 
-    return settings
+    return _settings_to_response(settings)
 
 
 # =====================================================

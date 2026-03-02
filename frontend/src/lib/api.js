@@ -82,8 +82,8 @@ export const ownerApi = {
   rescheduleBooking: (id, start_time) =>
     api.put(`/owner/bookings/${id}`, { start_time }).then((r) => r.data),
   getSettings: () => api.get("/owner/settings").then((r) => r.data),
-  updateSettings: (params) =>
-    api.patch("/owner/settings", null, { params }).then((r) => r.data),
+  updateSettings: (data) =>
+    api.patch("/owner/settings", data).then((r) => r.data),
   changePassword: (current_password, new_password) =>
     api.patch("/owner/me/password", { current_password, new_password }).then((r) => r.data),
   getWorktime: (params) =>

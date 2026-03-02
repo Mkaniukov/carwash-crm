@@ -12,7 +12,7 @@ from app.models.service import Service
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
 from app.services.booking_service import create_booking_logic
-from app.services.email_service import send_cancellation_email
+from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
 
 
 router = APIRouter(prefix="/worker", tags=["worker"])
@@ -31,6 +31,7 @@ class CreateBookingBody(BaseModel):
 @router.post("/bookings")
 def create_booking(
     body: CreateBookingBody,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("worker")),
 ):
@@ -47,6 +48,7 @@ def create_booking(
         source="worker",
         created_by=current_user.id,
     )
+    background_tasks.add_task(send_booking_notifications_to_owner_list, booking.id)
     return booking
 
 

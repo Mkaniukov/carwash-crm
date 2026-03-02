@@ -102,3 +102,61 @@ Ihr Team
 """
 
     send_email(booking.email, "Termin storniert", body)
+
+
+def _booking_info_body(booking):
+    """Build plain text with main booking info (for owner notification copy)."""
+    service_name = getattr(booking.service, "name", None) or "—"
+    formatted_date = booking.start_time.strftime("%d.%m.%Y")
+    formatted_time = booking.start_time.strftime("%H:%M")
+    return f"""
+Neue Buchung
+
+Kunde: {booking.client_name}
+Telefon: {booking.phone or '—'}
+E-Mail: {booking.email or '—'}
+
+Dienstleistung: {service_name}
+Preis: €{booking.service_price}
+Datum: {formatted_date}
+Uhrzeit: {formatted_time}
+Quelle: {booking.source or '—'}
+"""
+
+
+def send_booking_notification_copy(to_email: str, booking):
+    """Send one email to a single address with main booking info (no cancel link)."""
+    body = _booking_info_body(booking)
+    send_email(to_email, "Neue Buchung – Benachrichtigung", body.strip())
+
+
+def send_booking_notifications_to_owner_list(booking_id: int):
+    """Background task: load booking + settings, send notification to all notification_emails."""
+    from app.db.session import SessionLocal
+    from app.models.booking import Booking
+    from app.models.settings import BusinessSettings
+    from sqlalchemy.orm import joinedload
+    import json
+
+    db = SessionLocal()
+    try:
+        booking = db.query(Booking).options(joinedload(Booking.service)).filter(Booking.id == booking_id).first()
+        if not booking:
+            return
+        settings = db.query(BusinessSettings).first()
+        if not settings or not getattr(settings, "notification_emails", None):
+            return
+        raw = settings.notification_emails.strip()
+        if not raw:
+            return
+        try:
+            emails = json.loads(raw)
+        except Exception:
+            return
+        if not isinstance(emails, list):
+            return
+        for addr in emails:
+            if isinstance(addr, str) and addr.strip():
+                send_booking_notification_copy(addr.strip(), booking)
+    finally:
+        db.close()

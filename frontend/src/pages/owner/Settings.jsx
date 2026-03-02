@@ -31,6 +31,9 @@ export default function Settings() {
   const [passwordNew, setPasswordNew] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [notificationEmails, setNotificationEmails] = useState([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailsSaving, setEmailsSaving] = useState(false);
 
   useEffect(() => {
     ownerApi
@@ -40,6 +43,8 @@ export default function Settings() {
         setWorkEnd(timeToInputValue(s.work_end));
         const days = (s.working_days || "0,1,2,3,4").split(",").map((d) => d.trim()).filter(Boolean);
         setWorkingDays(days.length ? days : ["0", "1", "2", "3", "4"]);
+        const emails = Array.isArray(s.notification_emails) ? s.notification_emails : [];
+        setNotificationEmails(emails);
       })
       .catch(() => {
         toast.error("Einstellungen konnten nicht geladen werden.");
@@ -53,20 +58,55 @@ export default function Settings() {
     );
   };
 
+  const payload = () => ({
+    work_start: workStart.length === 5 ? workStart + ":00" : workStart,
+    work_end: workEnd.length === 5 ? workEnd + ":00" : workEnd,
+    working_days: workingDays.join(","),
+    notification_emails: notificationEmails,
+  });
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setSaving(true);
     try {
-      await ownerApi.updateSettings({
-        work_start: workStart.length === 5 ? workStart + ":00" : workStart,
-        work_end: workEnd.length === 5 ? workEnd + ":00" : workEnd,
-        working_days: workingDays.join(","),
-      });
+      await ownerApi.updateSettings(payload());
       toast.success("Einstellungen gespeichert.");
     } catch (err) {
       toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addNotificationEmail = () => {
+    const email = (newEmail || "").trim().toLowerCase();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Bitte gültige E-Mail-Adresse eingeben.");
+      return;
+    }
+    if (notificationEmails.includes(email)) {
+      toast.error("Diese E-Mail ist bereits in der Liste.");
+      return;
+    }
+    setNotificationEmails((prev) => [...prev, email]);
+    setNewEmail("");
+  };
+
+  const removeNotificationEmail = (email) => {
+    setNotificationEmails((prev) => prev.filter((e) => e !== email));
+  };
+
+  const handleSaveNotificationEmails = async (e) => {
+    e?.preventDefault();
+    setEmailsSaving(true);
+    try {
+      await ownerApi.updateSettings(payload());
+      toast.success("E-Mail-Liste gespeichert.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
+    } finally {
+      setEmailsSaving(false);
     }
   };
 
@@ -142,6 +182,38 @@ export default function Settings() {
 
           <div className="settings-form__actions">
             <Button type="submit" loading={saving}>Speichern</Button>
+          </div>
+        </form>
+      </Card>
+
+      <Card className="settings-form__card">
+        <h3 className="settings-form__section">E-Mail-Benachrichtigungen</h3>
+        <p className="settings-form__hint">
+          Diese E-Mail-Adressen erhalten bei jeder neuen Buchung eine Benachrichtigung mit den wichtigsten Daten (Kunde, Dienstleistung, Datum, Uhrzeit).
+        </p>
+        <form onSubmit={handleSaveNotificationEmails} className="settings-form">
+          <div className="settings-form__row" style={{ alignItems: "flex-end", gap: "0.5rem", flexWrap: "wrap" }}>
+            <Input
+              label="E-Mail hinzufügen"
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="z.B. team@beispiel.de"
+            />
+            <Button type="button" onClick={addNotificationEmail}>Hinzufügen</Button>
+          </div>
+          {notificationEmails.length > 0 && (
+            <ul className="settings-form__list" style={{ listStyle: "none", padding: 0, margin: "1rem 0 0" }}>
+              {notificationEmails.map((email) => (
+                <li key={email} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                  <span style={{ flex: 1 }}>{email}</span>
+                  <Button type="button" variant="secondary" onClick={() => removeNotificationEmail(email)}>Entfernen</Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="settings-form__actions" style={{ marginTop: "1rem" }}>
+            <Button type="submit" loading={emailsSaving}>Liste speichern</Button>
           </div>
         </form>
       </Card>

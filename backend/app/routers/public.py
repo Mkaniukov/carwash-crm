@@ -10,7 +10,8 @@ from app.models.booking import Booking
 from app.services.booking_service import create_booking_logic
 from app.services.email_service import (
     send_booking_confirmation,
-    send_cancellation_email
+    send_cancellation_email,
+    send_booking_notifications_to_owner_list,
 )
 from app.core.rate_limit import check_booking_rate_limit
 
@@ -73,6 +74,7 @@ def create_public_booking(
 
     # 📩 Email async
     background_tasks.add_task(send_booking_confirmation, booking)
+    background_tasks.add_task(send_booking_notifications_to_owner_list, booking.id)
 
     return {
         "message": "Booking created",

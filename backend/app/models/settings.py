@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Time, String
+from sqlalchemy import Column, Integer, Time, String, Text
 from datetime import time
 from app.db.session import Base
 
@@ -14,3 +14,6 @@ class BusinessSettings(Base):
     # 0=Monday ... 6=Sunday
     # stored as string: "0,1,2,3,4" (weekday numbers)
     working_days = Column(String, nullable=False, default="0,1,2,3,4")
+
+    # JSON array of emails that receive a copy of each new booking notification, e.g. '["a@b.com"]'
+    notification_emails = Column(Text, nullable=False, default="[]")
