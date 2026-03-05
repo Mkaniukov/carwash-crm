@@ -17,6 +17,7 @@ from app.models.booking import Booking, BookingSource
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
 from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
+from app.core.schedule import get_work_hours_for_weekday
 
 router = APIRouter(prefix="/owner", tags=["owner"])
 
@@ -333,10 +334,11 @@ def owner_reschedule_booking(
     settings = db.query(BusinessSettings).first()
     end_time = start_time + timedelta(minutes=service.duration)
     weekday = start_time.weekday()
-    allowed_days = [int(d) for d in settings.working_days.split(",")]
-    if weekday not in allowed_days:
+    day_hours = get_work_hours_for_weekday(settings, weekday)
+    if not day_hours:
         raise HTTPException(status_code=400, detail="Closed on this day")
-    if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
+    work_start, work_end = day_hours
+    if start_time.time() < work_start or end_time.time() > work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
     active_statuses = ("booked",)
     overlap = (
@@ -376,6 +378,13 @@ def _settings_to_response(settings: BusinessSettings) -> dict:
         out["notification_emails"] = []
     if not isinstance(out["notification_emails"], list):
         out["notification_emails"] = []
+    raw_hpd = getattr(settings, "hours_per_day", None)
+    try:
+        out["hours_per_day"] = json.loads(raw_hpd) if isinstance(raw_hpd, str) and raw_hpd else (raw_hpd or {})
+    except Exception:
+        out["hours_per_day"] = {}
+    if not isinstance(out["hours_per_day"], dict):
+        out["hours_per_day"] = {}
     return out
 
 
@@ -384,6 +393,7 @@ class UpdateSettingsBody(BaseModel):
     work_end: Optional[str] = None
     working_days: Optional[str] = None
     notification_emails: Optional[list[str]] = None
+    hours_per_day: Optional[dict] = None
 
 
 @router.get("/settings")
@@ -434,6 +444,9 @@ def update_settings(
     if body.notification_emails is not None:
         import json
         settings.notification_emails = json.dumps([e.strip() for e in body.notification_emails if isinstance(e, str) and e.strip()])
+    if body.hours_per_day is not None:
+        import json
+        settings.hours_per_day = json.dumps(body.hours_per_day) if body.hours_per_day else None
 
     db.add(settings)
     db.commit()

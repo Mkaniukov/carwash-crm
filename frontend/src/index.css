@@ -712,6 +712,10 @@ textarea {
 .settings-form__days { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-6); }
 .settings-form__day { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
 .settings-form__day input { width: auto; }
+.settings-form__per-day { margin-bottom: var(--space-4); }
+.settings-form__per-day-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.settings-form__per-day-row .settings-form__day { min-width: 4rem; }
+.settings-form__per-day-row .input-group { margin-bottom: 0; min-width: 6rem; }
 .settings-form__actions { margin-top: var(--space-4); }
 
 /* ===== Error boundary ===== */

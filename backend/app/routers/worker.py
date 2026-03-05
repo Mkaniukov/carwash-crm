@@ -13,6 +13,7 @@ from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
 from app.services.booking_service import create_booking_logic
 from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
+from app.core.schedule import get_work_hours_for_weekday
 
 
 router = APIRouter(prefix="/worker", tags=["worker"])
@@ -231,15 +232,12 @@ def reschedule_booking(
 
     new_end_time = new_start_time + timedelta(minutes=service.duration)
 
-    # Check weekday
     weekday = new_start_time.weekday()
-    allowed_days = [int(d) for d in settings.working_days.split(",")]
-
-    if weekday not in allowed_days:
+    day_hours = get_work_hours_for_weekday(settings, weekday)
+    if not day_hours:
         raise HTTPException(status_code=400, detail="Closed on this day")
-
-    # Check working hours
-    if new_start_time.time() < settings.work_start or new_end_time.time() > settings.work_end:
+    work_start, work_end = day_hours
+    if new_start_time.time() < work_start or new_end_time.time() > work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
     # Check overlap

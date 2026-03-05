@@ -15,6 +15,40 @@ const DAY_LABELS = [
   { value: "6", label: "So" },
 ];
 
+const DEFAULT_START = "07:30";
+const DEFAULT_END = "18:00";
+
+function emptyHoursPerDay() {
+  return Object.fromEntries(
+    DAY_LABELS.map(({ value }) => [value, { start: DEFAULT_START, end: DEFAULT_END }])
+  );
+}
+
+function hoursPerDayFromSettings(s) {
+  const hpd = s?.hours_per_day;
+  if (hpd && typeof hpd === "object" && Object.keys(hpd).length > 0) {
+    const out = {};
+    for (const { value } of DAY_LABELS) {
+      const day = hpd[value];
+      if (day && typeof day === "object" && day.start && day.end) {
+        out[value] = { start: String(day.start).slice(0, 5), end: String(day.end).slice(0, 5) };
+      } else {
+        out[value] = null;
+      }
+    }
+    return out;
+  }
+  const start = timeToInputValue(s?.work_start) || DEFAULT_START;
+  const end = timeToInputValue(s?.work_end) || DEFAULT_END;
+  const days = (s?.working_days || "0,1,2,3,4").split(",").map((d) => d.trim()).filter(Boolean);
+  return Object.fromEntries(
+    DAY_LABELS.map(({ value }) => [
+      value,
+      days.includes(value) ? { start, end } : null,
+    ])
+  );
+}
+
 function timeToInputValue(t) {
   if (!t) return "09:00";
   const s = typeof t === "string" ? t : String(t);
@@ -24,9 +58,7 @@ function timeToInputValue(t) {
 export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [workStart, setWorkStart] = useState("09:00");
-  const [workEnd, setWorkEnd] = useState("18:00");
-  const [workingDays, setWorkingDays] = useState(["0", "1", "2", "3", "4"]);
+  const [hoursPerDay, setHoursPerDay] = useState(emptyHoursPerDay());
   const [passwordCurrent, setPasswordCurrent] = useState("");
   const [passwordNew, setPasswordNew] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
@@ -39,10 +71,7 @@ export default function Settings() {
     ownerApi
       .getSettings()
       .then((s) => {
-        setWorkStart(timeToInputValue(s.work_start));
-        setWorkEnd(timeToInputValue(s.work_end));
-        const days = (s.working_days || "0,1,2,3,4").split(",").map((d) => d.trim()).filter(Boolean);
-        setWorkingDays(days.length ? days : ["0", "1", "2", "3", "4"]);
+        setHoursPerDay(hoursPerDayFromSettings(s));
         const emails = Array.isArray(s.notification_emails) ? s.notification_emails : [];
         setNotificationEmails(emails);
       })
@@ -52,18 +81,35 @@ export default function Settings() {
       .finally(() => setLoading(false));
   }, []);
 
-  const toggleDay = (value) => {
-    setWorkingDays((prev) =>
-      prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value].sort()
-    );
+  const setDayOpen = (value, open) => {
+    setHoursPerDay((prev) => ({
+      ...prev,
+      [value]: open ? { start: DEFAULT_START, end: DEFAULT_END } : null,
+    }));
   };
 
-  const payload = () => ({
-    work_start: workStart.length === 5 ? workStart + ":00" : workStart,
-    work_end: workEnd.length === 5 ? workEnd + ":00" : workEnd,
-    working_days: workingDays.join(","),
-    notification_emails: notificationEmails,
-  });
+  const setDayHours = (value, field, val) => {
+    setHoursPerDay((prev) => {
+      const day = prev[value];
+      if (!day) return prev;
+      return { ...prev, [value]: { ...day, [field]: val } };
+    });
+  };
+
+  const payload = () => {
+    const openDays = DAY_LABELS.filter(({ value }) => hoursPerDay[value]).map(({ value }) => value);
+    const first = openDays[0];
+    const firstDay = first != null ? hoursPerDay[first] : null;
+    const start = firstDay?.start?.slice(0, 5) || DEFAULT_START;
+    const end = firstDay?.end?.slice(0, 5) || DEFAULT_END;
+    return {
+      work_start: start.length === 5 ? start + ":00" : start,
+      work_end: end.length === 5 ? end + ":00" : end,
+      working_days: openDays.join(","),
+      notification_emails: notificationEmails,
+      hours_per_day: hoursPerDay,
+    };
+  };
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -149,35 +195,43 @@ export default function Settings() {
 
       <Card>
         <form onSubmit={handleSubmit} className="settings-form">
-          <h3 className="settings-form__section">Öffnungszeiten</h3>
-          <div className="settings-form__row">
-            <Input
-              label="Arbeitsbeginn"
-              type="time"
-              value={workStart}
-              onChange={(e) => setWorkStart(e.target.value)}
-            />
-            <Input
-              label="Arbeitsende"
-              type="time"
-              value={workEnd}
-              onChange={(e) => setWorkEnd(e.target.value)}
-            />
-          </div>
-
-          <h3 className="settings-form__section">Arbeitstage</h3>
-          <p className="settings-form__hint">Wählen Sie die Tage, an denen Sie geöffnet haben.</p>
-          <div className="settings-form__days">
-            {DAY_LABELS.map(({ value, label }) => (
-              <label key={value} className="settings-form__day">
-                <input
-                  type="checkbox"
-                  checked={workingDays.includes(value)}
-                  onChange={() => toggleDay(value)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
+          <h3 className="settings-form__section">Öffnungszeiten pro Tag</h3>
+          <p className="settings-form__hint">Für jeden Wochentag können Sie geöffnet lassen oder eigene Zeiten eintragen. Leer = geschlossen.</p>
+          <div className="settings-form__per-day">
+            {DAY_LABELS.map(({ value, label }) => {
+              const day = hoursPerDay[value];
+              const isOpen = day != null;
+              return (
+                <div key={value} className="settings-form__per-day-row">
+                  <label className="settings-form__day">
+                    <input
+                      type="checkbox"
+                      checked={isOpen}
+                      onChange={(e) => setDayOpen(value, e.target.checked)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                  {isOpen ? (
+                    <>
+                      <Input
+                        type="time"
+                        value={day.start}
+                        onChange={(e) => setDayHours(value, "start", e.target.value)}
+                        aria-label={`${label} Beginn`}
+                      />
+                      <Input
+                        type="time"
+                        value={day.end}
+                        onChange={(e) => setDayHours(value, "end", e.target.value)}
+                        aria-label={`${label} Ende`}
+                      />
+                    </>
+                  ) : (
+                    <span className="text-muted">Geschlossen</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div className="settings-form__actions">

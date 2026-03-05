@@ -149,17 +149,25 @@ def public_bookings_by_date(
 # =====================================================
 @router.get("/settings")
 def get_public_settings(db: Session = Depends(get_db)):
+    import json
     settings = db.query(BusinessSettings).first()
 
     if not settings:
         return {
             "work_start": "07:30:00",
             "work_end": "18:00:00",
-            "working_days": "0,1,2,3,4"
+            "working_days": "0,1,2,3,4",
+            "hours_per_day": {},
         }
 
-    return {
+    out = {
         "work_start": settings.work_start.strftime("%H:%M:%S"),
         "work_end": settings.work_end.strftime("%H:%M:%S"),
-        "working_days": settings.working_days
+        "working_days": settings.working_days,
     }
+    raw = getattr(settings, "hours_per_day", None)
+    try:
+        out["hours_per_day"] = json.loads(raw) if isinstance(raw, str) and raw else {}
+    except Exception:
+        out["hours_per_day"] = {}
+    return out

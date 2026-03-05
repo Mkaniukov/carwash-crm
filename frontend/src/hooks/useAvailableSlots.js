@@ -6,6 +6,7 @@ import {
   combineDateAndTime,
   addDuration,
   isWorkingDay,
+  getDayHours,
 } from "../utils/date";
 import { getErrorMessage } from "../utils/error";
 
@@ -51,11 +52,11 @@ export function useAvailableSlots(date, service) {
   }, [settings, date]);
 
   const slots = useMemo(() => {
-    if (!settings) return [];
-    const start = settings.work_start?.slice(0, 5) || "09:00";
-    const end = settings.work_end?.slice(0, 5) || "18:00";
-    return generateTimeSlots(start, end, 30);
-  }, [settings]);
+    if (!settings || !date) return [];
+    const dayHours = getDayHours(settings, date);
+    if (!dayHours) return [];
+    return generateTimeSlots(dayHours.start, dayHours.end, 30);
+  }, [settings, date]);
 
   const duration = service?.duration ?? 30;
 

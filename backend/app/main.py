@@ -199,6 +199,22 @@ def ensure_notification_emails_column():
             log.warning("ensure_notification_emails_column: %s", e)
 
 
+@app.on_event("startup")
+def ensure_hours_per_day_column():
+    """Add hours_per_day to business_settings if missing (auto-migration on deploy)."""
+    from sqlalchemy import text
+    try:
+        stmt = "ALTER TABLE business_settings ADD COLUMN hours_per_day TEXT"
+        with engine.begin() as conn:
+            conn.execute(text(stmt))
+        log.info("Added column business_settings.hours_per_day")
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "already exists" in str(e).lower():
+            log.debug("Column hours_per_day already exists")
+        else:
+            log.warning("ensure_hours_per_day_column: %s", e)
+
+
 # Default services when DB is empty (e.g. after deploy on Render)
 DEFAULT_SERVICES = [
     {"name": "CAR SPA®", "price": 24, "duration": 30, "description": "Schnelle, günstige und schonende textile Außenwäsche. Manuelle Vorreinigung – Aktivschaum – Shampoowäsche – Radwäsche – maschinelles Trocknen."},

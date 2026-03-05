@@ -6,6 +6,7 @@ import secrets
 from app.models.booking import Booking
 from app.models.service import Service
 from app.models.settings import BusinessSettings
+from app.core.schedule import get_work_hours_for_weekday
 
 
 def create_booking_logic(
@@ -41,15 +42,13 @@ def create_booking_logic(
     if end_time.tzinfo is not None:
         end_time = end_time.replace(tzinfo=None)
 
-    # Check weekday
+    # Check weekday and working hours (per-day or global)
     weekday = start_time.weekday()
-    allowed_days = [int(d) for d in settings.working_days.split(",")]
-
-    if weekday not in allowed_days:
+    day_hours = get_work_hours_for_weekday(settings, weekday)
+    if not day_hours:
         raise HTTPException(status_code=400, detail="Closed on this day")
-
-    # Check working hours
-    if start_time.time() < settings.work_start or end_time.time() > settings.work_end:
+    work_start, work_end = day_hours
+    if start_time.time() < work_start or end_time.time() > work_end:
         raise HTTPException(status_code=400, detail="Outside working hours")
 
     # Check overlap (slot blocked when status is booked)

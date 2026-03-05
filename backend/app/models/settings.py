@@ -17,3 +17,7 @@ class BusinessSettings(Base):
 
     # JSON array of emails that receive a copy of each new booking notification, e.g. '["a@b.com"]'
     notification_emails = Column(Text, nullable=False, default="[]")
+
+    # Optional: per-weekday hours. JSON: {"0": {"start": "07:30", "end": "18:00"}, "1": {...}, ..., "6": null}.
+    # 0=Monday ... 6=Sunday. Missing or null = closed that day. When set, overrides work_start/work_end/working_days.
+    hours_per_day = Column(Text, nullable=True, default=None)

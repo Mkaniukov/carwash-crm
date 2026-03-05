@@ -108,8 +108,42 @@ function normalizeWorkingDays(working_days) {
   return arr.length ? arr : defaultDays;
 }
 
+/** Backend weekday: 0=Mon … 6=Sun. JS getDay(): 0=Sun, 1=Mon, … 6=Sat. */
+export function getBackendWeekday(date) {
+  const d = typeof date === "string" ? parseISO(date) : date;
+  const jsDay = d.getDay();
+  return jsDay === 0 ? 6 : jsDay - 1;
+}
+
+/** If settings have hours_per_day, return { start, end } for that day or null if closed. Else use work_start/work_end + working_days. */
+export function getDayHours(settings, date) {
+  if (!settings) return null;
+  const d = typeof date === "string" ? parseISO(date) : date;
+  const backendDay = getBackendWeekday(d);
+  const hpd = settings.hours_per_day;
+  if (hpd && typeof hpd === "object" && Object.keys(hpd).length > 0) {
+    const day = hpd[String(backendDay)];
+    if (day && typeof day === "object" && day.start && day.end) {
+      return { start: String(day.start).slice(0, 5), end: String(day.end).slice(0, 5) };
+    }
+    return null;
+  }
+  const weekday = d.getDay() === 0 ? 7 : d.getDay();
+  const workingDays = normalizeWorkingDays(settings.working_days);
+  if (!workingDays.includes(weekday)) return null;
+  const start = (settings.work_start && String(settings.work_start).slice(0, 5)) || "09:00";
+  const end = (settings.work_end && String(settings.work_end).slice(0, 5)) || "18:00";
+  return { start, end };
+}
+
 export function isWorkingDay(date, settings) {
   if (!settings) return true;
+  const hpd = settings.hours_per_day;
+  if (hpd && typeof hpd === "object" && Object.keys(hpd).length > 0) {
+    const backendDay = getBackendWeekday(date);
+    const day = hpd[String(backendDay)];
+    return day != null && typeof day === "object" && day.start && day.end;
+  }
   const d = typeof date === "string" ? parseISO(date) : date;
   const weekday = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon … 7=Sun
   const workingDays = normalizeWorkingDays(settings.working_days);
