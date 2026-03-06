@@ -33,11 +33,12 @@ from app.routers.owner import router as owner_router
 from app.routers.worker import router as worker_router
 from app.routers.public import router as public_router
 
-# CORS (localhost + frontend on Render). CORS_ORIGINS from env (comma-separated).
+# CORS. CORS_ORIGINS from env (comma-separated), e.g. "https://booking.carelbl.at,https://carwash-crm-web.onrender.com"
 _cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173").strip()
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
-if "https://carwash-crm-web.onrender.com" not in _cors_origins:
-    _cors_origins.append("https://carwash-crm-web.onrender.com")
+for default in ("https://carwash-crm-web.onrender.com", "https://booking.carelbl.at"):
+    if default not in _cors_origins:
+        _cors_origins.append(default)
 
 # Add CORS to all responses (including 500/4xx) so browser does not block
 def _cors_origin_allowed(origin: str) -> bool:
@@ -46,7 +47,8 @@ def _cors_origin_allowed(origin: str) -> bool:
     if origin in _cors_origins:
         return True
     import re
-    return bool(re.match(r"https://.*\.onrender\.com$", origin))
+    # *.onrender.com and *.carelbl.at
+    return bool(re.match(r"https://(.*\.onrender\.com|.*\.carelbl\.at)$", origin))
 
 @app.middleware("http")
 async def add_cors_to_all_responses(request, call_next):
@@ -62,7 +64,7 @@ async def add_cors_to_all_responses(request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com",
+    allow_origin_regex=r"https://(.*\.onrender\.com|.*\.carelbl\.at)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
