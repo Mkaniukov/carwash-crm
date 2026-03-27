@@ -12,6 +12,7 @@ from app.services.email_service import (
     send_booking_confirmation,
     send_cancellation_email,
     send_booking_notifications_to_owner_list,
+    send_cancellation_notifications_to_owner_list,
 )
 from app.core.rate_limit import check_booking_rate_limit
 
@@ -102,6 +103,7 @@ def cancel_by_token(
     db.commit()
 
     background_tasks.add_task(send_cancellation_email, booking)
+    background_tasks.add_task(send_cancellation_notifications_to_owner_list, booking.id)
 
     return {"message": "Booking canceled"}
 

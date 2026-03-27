@@ -60,9 +60,15 @@ export default function Schedule() {
   weekDays.forEach((d) => {
     const key = format(d, "yyyy-MM-dd");
     bookingsByDay[key] = (bookings || []).filter((b) => {
-      if (isCanceled(b)) return false;
       const start = new Date(b.start_time);
       return format(start, "yyyy-MM-dd") === key;
+    });
+    // Active first, then cancelled (newest first within group by start_time)
+    bookingsByDay[key].sort((a, b) => {
+      const ca = isCanceled(a) ? 1 : 0;
+      const cb = isCanceled(b) ? 1 : 0;
+      if (ca !== cb) return ca - cb;
+      return new Date(a.start_time) - new Date(b.start_time);
     });
   });
 
@@ -112,7 +118,13 @@ export default function Schedule() {
                   <p className="schedule-day__empty">Keine Termine</p>
                 ) : (
                   (bookingsByDay[format(day, "yyyy-MM-dd")] || []).map((b) => (
-                    <div key={b.id} className="schedule-booking">
+                    <div
+                      key={b.id}
+                      className={`schedule-booking${isCanceled(b) ? " schedule-booking--cancelled" : ""}`}
+                    >
+                      {isCanceled(b) && (
+                        <div className="schedule-booking__badge">Storniert</div>
+                      )}
                       <div className="schedule-booking__time">
                         {format(new Date(b.start_time), "HH:mm")} – {format(new Date(b.end_time), "HH:mm")}
                       </div>
@@ -125,19 +137,21 @@ export default function Schedule() {
                           {b.email && <span>✉ {b.email}</span>}
                         </div>
                       )}
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        className="schedule-booking__cancel"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          cancelBooking(b.id);
-                        }}
-                      >
-                        Stornieren
-                      </Button>
+                      {!isCanceled(b) && (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          className="schedule-booking__cancel"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cancelBooking(b.id);
+                          }}
+                        >
+                          Stornieren
+                        </Button>
+                      )}
                     </div>
                   ))
                 )}
