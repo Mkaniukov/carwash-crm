@@ -73,7 +73,7 @@ Uhrzeit: {formatted_time}
 Hinweis:
 Bei besonders großen Fahrzeugen (z.B. SUV, Transporter, Vans) wird ein Aufpreis von €24 berechnet.
 
-Falls Sie Ihren Termin stornieren möchten, klicken Sie bitte auf folgenden Link:
+Falls Sie Ihren Termin stornieren möchten, öffnen Sie den folgenden Link und bestätigen Sie die Stornierung auf der Seite (Schutz vor versehentlicher Stornierung durch E-Mail-Programme):
 {cancel_link}
 
 Mit freundlichen Grüßen

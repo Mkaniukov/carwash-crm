@@ -47,7 +47,10 @@ export const publicApi = {
   getBookingsByDate: (date) =>
     api.get("/public/bookings/by-date", { params: { date } }).then((r) => r.data),
   createBooking: (body) => api.post("/public/bookings", body).then((r) => r.data),
-  cancelByToken: (token) => api.get(`/public/cancel/${token}`).then((r) => r.data),
+  getCancelPreview: (token) =>
+    api.get(`/public/cancel-preview/${encodeURIComponent(token)}`).then((r) => r.data),
+  cancelByToken: (token) =>
+    api.post(`/public/cancel/${encodeURIComponent(token)}`).then((r) => r.data),
 };
 
 // Auth – backend uses OAuth2PasswordRequestForm: form body username + password

@@ -84,20 +84,43 @@ def create_public_booking(
 
 
 # =====================================================
-# CANCEL BY TOKEN
+# CANCEL BY TOKEN (POST only — GET was unsafe: email scanners triggered instant cancel)
 # =====================================================
-@router.get("/cancel/{token}")
+@router.get("/cancel-preview/{token}")
+def cancel_preview(token: str, db: Session = Depends(get_db)):
+    """Return booking summary for confirmation page. Does not cancel."""
+    from sqlalchemy.orm import joinedload
+
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.service))
+        .filter(Booking.cancel_token == token)
+        .first()
+    )
+    if not booking:
+        raise HTTPException(status_code=404, detail="Invalid link")
+    if str(booking.status) == "cancelled":
+        raise HTTPException(status_code=400, detail="Already cancelled")
+
+    return {
+        "service_name": booking.service.name if booking.service else None,
+        "start_time": booking.start_time.isoformat() if booking.start_time else None,
+        "client_name": booking.client_name,
+    }
+
+
+@router.post("/cancel/{token}")
 def cancel_by_token(
     token: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    booking = db.query(Booking).filter(
-        Booking.cancel_token == token
-    ).first()
+    booking = db.query(Booking).filter(Booking.cancel_token == token).first()
 
     if not booking:
         raise HTTPException(status_code=404, detail="Invalid link")
+    if str(booking.status) == "cancelled":
+        raise HTTPException(status_code=400, detail="Already cancelled")
 
     booking.status = "cancelled"
     db.commit()
