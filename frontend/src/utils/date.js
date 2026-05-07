@@ -138,17 +138,19 @@ export function getDayHours(settings, date) {
 
 export function isWorkingDay(date, settings) {
   if (!settings) return true;
+  const d = typeof date === "string" ? parseISO(date) : date;
+  const dateStr = format(d, "yyyy-MM-dd");
+  const blocked = settings.blocked_dates ?? [];
+  if (Array.isArray(blocked) && blocked.includes(dateStr)) return false;
   const hpd = settings.hours_per_day;
   if (hpd && typeof hpd === "object" && Object.keys(hpd).length > 0) {
     const backendDay = getBackendWeekday(date);
     const day = hpd[String(backendDay)];
     return day != null && typeof day === "object" && day.start && day.end;
   }
-  const d = typeof date === "string" ? parseISO(date) : date;
   const weekday = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon … 7=Sun
   const workingDays = normalizeWorkingDays(settings.working_days);
   if (!workingDays.includes(weekday)) return false;
-  const dateStr = format(d, "yyyy-MM-dd");
   const daysOff = settings.days_off ?? [];
   return !daysOff.includes(dateStr);
 }

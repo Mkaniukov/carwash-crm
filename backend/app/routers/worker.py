@@ -11,8 +11,9 @@ from app.models.booking import Booking, BookingSource
 from app.models.service import Service
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
-from app.services.booking_service import create_booking_logic
+from app.services.booking_service import create_booking_logic, raise_if_day_blocked
 from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
+from app.models.blocked_date import BlockedDate
 from app.core.schedule import get_work_hours_for_weekday
 
 
@@ -227,6 +228,10 @@ def reschedule_booking(
     if str(booking.status) == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot modify canceled booking")
 
+    if new_start_time.tzinfo:
+        new_start_time = new_start_time.replace(tzinfo=None)
+    raise_if_day_blocked(db, new_start_time)
+
     service = db.query(Service).filter(Service.id == booking.service_id).first()
     settings = db.query(BusinessSettings).first()
 
@@ -421,3 +426,71 @@ def work_time_list(
         }
         for r in rows
     ]
+
+
+def _worker_blocked_row_dict(row: BlockedDate, db: Session) -> dict:
+    creator_name = None
+    if row.created_by:
+        u = db.query(User).filter(User.id == row.created_by).first()
+        creator_name = u.username if u else None
+    return {
+        "id": row.id,
+        "block_date": row.block_date.isoformat(),
+        "note": row.note or "",
+        "kind": row.kind,
+        "creator_username": creator_name,
+    }
+
+
+class WorkerBlockedDateBody(BaseModel):
+    date: str
+    note: Optional[str] = None
+
+
+@router.get("/blocked-dates")
+def worker_list_blocked_dates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    rows = db.query(BlockedDate).order_by(BlockedDate.block_date).all()
+    return [_worker_blocked_row_dict(r, db) for r in rows]
+
+
+@router.post("/blocked-dates")
+def worker_add_blocked_date(
+    body: WorkerBlockedDateBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    try:
+        d = datetime.strptime(body.date.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    if db.query(BlockedDate).filter(BlockedDate.block_date == d).first():
+        raise HTTPException(status_code=400, detail="This date is already blocked")
+    row = BlockedDate(
+        block_date=d,
+        note=(body.note or "").strip() or None,
+        kind="worker_block",
+        created_by=current_user.id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _worker_blocked_row_dict(row, db)
+
+
+@router.delete("/blocked-dates/{row_id}")
+def worker_delete_blocked_date(
+    row_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("worker")),
+):
+    row = db.query(BlockedDate).filter(BlockedDate.id == row_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found")
+    if row.kind != "worker_block" or row.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only remove your own day blocks")
+    db.delete(row)
+    db.commit()
+    return {"message": "Deleted"}

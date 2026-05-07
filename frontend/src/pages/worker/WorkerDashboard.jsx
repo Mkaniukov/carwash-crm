@@ -8,6 +8,7 @@ import { workerApi, publicApi } from "../../lib/api";
 import { getErrorMessage } from "../../utils/error";
 import { toLocalISOString } from "../../utils/date";
 import { useAvailableSlots } from "../../hooks/useAvailableSlots";
+import { useAuth } from "../../context/AuthContext";
 
 function isBooked(b) {
   return (b.status || "").toLowerCase() === "booked";
@@ -16,20 +17,14 @@ function isCompleted(b) {
   return (b.status || "").toLowerCase() === "completed";
 }
 
-function WorkerCalendar({ services, onSlotSelect }) {
+function WorkerCalendar({ services, onSlotSelect, slotsRefreshKey }) {
   const [date, setDate] = useState(new Date());
-  const [bookings, setBookings] = useState([]);
   const [serviceId, setServiceId] = useState(services?.[0]?.id ?? null);
-  const { slots, loading } = useAvailableSlots(date, services?.find((s) => s.id === serviceId));
-
-  useEffect(() => {
-    const from = format(date, "yyyy-MM-dd");
-    const to = from;
-    workerApi
-      .getBookings({ from, to })
-      .then((data) => setBookings(Array.isArray(data) ? data : []))
-      .catch(() => setBookings([]));
-  }, [date]);
+  const { slots, loading } = useAvailableSlots(
+    date,
+    services?.find((s) => s.id === serviceId),
+    slotsRefreshKey ?? 0
+  );
 
   const handleSlot = (timeStr) => {
     if (!timeStr || typeof timeStr !== "string") return;
@@ -83,8 +78,10 @@ function WorkerCalendar({ services, onSlotSelect }) {
 }
 
 export default function WorkerDashboard() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
+  const [blockedList, setBlockedList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [modalOpen, setModalOpen] = useState(false);
@@ -95,24 +92,35 @@ export default function WorkerDashboard() {
   const [completingId, setCompletingId] = useState(null);
   const [manualDate, setManualDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [manualTime, setManualTime] = useState("10:00");
+  const [blockDayDate, setBlockDayDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [blockDayNote, setBlockDayNote] = useState("");
+  const [blockDaySaving, setBlockDaySaving] = useState(false);
+  /** Bumps slot picker refetch (same calendar day keeps useAvailableSlots stale otherwise). */
+  const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
+  const bumpSlotsRefresh = () => setSlotsRefreshKey((k) => k + 1);
 
-  const load = () => {
+  const load = (opts = {}) => {
+    const silent = Boolean(opts.silent);
     const from = format(weekStart, "yyyy-MM-dd");
     const to = format(addDays(weekStart, 6), "yyyy-MM-dd");
-    setLoading(true);
+    if (!silent) setLoading(true);
     Promise.all([
-      workerApi.getBookings({ from, to }).then((data) => Array.isArray(data) ? data : data?.bookings ?? []),
+      workerApi.getBookings({ from, to }).then((data) => (Array.isArray(data) ? data : data?.bookings ?? [])),
       publicApi.getServices().catch(() => []),
+      workerApi.getBlockedDates().catch(() => []),
     ])
-      .then(([b, s]) => {
+      .then(([b, s, blk]) => {
         setBookings(b);
         setServices(Array.isArray(s) ? s : []);
+        setBlockedList(Array.isArray(blk) ? blk : []);
       })
       .catch(() => {
         toast.error("Termine konnten nicht geladen werden.");
         setBookings([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   };
 
   useEffect(() => load(), [weekStart]);
@@ -122,7 +130,8 @@ export default function WorkerDashboard() {
     try {
       await workerApi.cancelBooking(id);
       toast.success("Termin storniert.");
-      load();
+      bumpSlotsRefresh();
+      load({ silent: true });
     } catch (err) {
       toast.error(getErrorMessage(err, "Stornierung fehlgeschlagen."));
     }
@@ -134,7 +143,8 @@ export default function WorkerDashboard() {
     try {
       await workerApi.markCompleted(id);
       toast.success("Erledigt.");
-      load();
+      bumpSlotsRefresh();
+      load({ silent: true });
     } catch (err) {
       toast.error(getErrorMessage(err, "Fehler."));
     } finally {
@@ -188,11 +198,44 @@ export default function WorkerDashboard() {
       });
       toast.success("Termin angelegt.");
       setModalOpen(false);
-      load();
+      bumpSlotsRefresh();
+      load({ silent: true });
     } catch (err) {
       toast.error(getErrorMessage(err, "Fehler beim Anlegen."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const submitDayBlock = async (e) => {
+    e?.preventDefault();
+    if (!blockDayDate) return;
+    setBlockDaySaving(true);
+    try {
+      await workerApi.addBlockedDate({
+        date: blockDayDate,
+        note: blockDayNote.trim() || undefined,
+      });
+      toast.success("Ganzer Tag gesperrt.");
+      setBlockDayNote("");
+      bumpSlotsRefresh();
+      load({ silent: true });
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Sperre fehlgeschlagen."));
+    } finally {
+      setBlockDaySaving(false);
+    }
+  };
+
+  const removeDayBlock = async (id) => {
+    if (!window.confirm("Tagessperre aufheben?")) return;
+    try {
+      await workerApi.deleteBlockedDate(id);
+      toast.success("Sperre entfernt.");
+      bumpSlotsRefresh();
+      load({ silent: true });
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Fehler."));
     }
   };
 
@@ -243,6 +286,26 @@ export default function WorkerDashboard() {
               <h3 className={`schedule-day__title ${isToday(day) ? "schedule-day__title--today" : ""}`}>
                 {format(day, "EEEE, d.", { locale: de })}
               </h3>
+              {(() => {
+                const dayKey = format(day, "yyyy-MM-dd");
+                const dayBlock = blockedList.find((x) => x.block_date === dayKey);
+                if (!dayBlock) return null;
+                const isMine =
+                  dayBlock.kind === "worker_block" && user?.username && dayBlock.creator_username === user.username;
+                return (
+                  <div className="schedule-day__blocked-banner" style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}>
+                    <strong>Ganzer Tag gesperrt</strong>
+                    {dayBlock.kind === "holiday" && " (Feiertag)"}
+                    {dayBlock.kind === "worker_block" && dayBlock.creator_username && ` (${dayBlock.creator_username})`}
+                    {dayBlock.note && ` · ${dayBlock.note}`}
+                    {isMine && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeDayBlock(dayBlock.id)} style={{ marginLeft: "0.5rem" }}>
+                        Aufheben
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="schedule-day__list">
                 {(() => {
                   const dayData = bookingsByDay[format(day, "yyyy-MM-dd")] || { booked: [], completed: [] };
@@ -295,12 +358,35 @@ export default function WorkerDashboard() {
         </div>
       )}
 
+      <Card style={{ marginBottom: 24 }}>
+        <h3 className="schedule-day__title">Ganzen Tag sperren</h3>
+        <p className="text-muted" style={{ marginBottom: 12, fontSize: "0.875rem" }}>
+          An diesem Tag können keine Kunden buchen und keine Termine angelegt werden. Eigene Sperren kannst du wieder aufheben (Button „Aufheben“ am betroffenen Tag).
+        </p>
+        <form onSubmit={submitDayBlock} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-end" }}>
+          <Input
+            label="Datum"
+            type="date"
+            value={blockDayDate}
+            onChange={(e) => setBlockDayDate(e.target.value)}
+          />
+          <Input
+            label="Grund (optional)"
+            type="text"
+            value={blockDayNote}
+            onChange={(e) => setBlockDayNote(e.target.value)}
+            placeholder="z. B. Außendienst"
+          />
+          <Button type="submit" loading={blockDaySaving}>Tag sperren</Button>
+        </form>
+      </Card>
+
       <Card>
         <h3 className="schedule-day__title">Termin anlegen</h3>
         <p className="text-muted" style={{ marginBottom: 12 }}>
           Zeit im Kalender wählen oder unten „Datum/Uhrzeit eingeben“.
         </p>
-        <WorkerCalendar services={services} onSlotSelect={openManual} />
+        <WorkerCalendar services={services} onSlotSelect={openManual} slotsRefreshKey={slotsRefreshKey} />
         <Button type="button" variant="ghost" size="sm" onClick={openManualWithDate} style={{ marginTop: 12 }}>
           Datum/Uhrzeit eingeben (ohne Kalender)
         </Button>

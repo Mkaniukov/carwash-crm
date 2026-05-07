@@ -175,6 +175,11 @@ def public_bookings_by_date(
 @router.get("/settings")
 def get_public_settings(db: Session = Depends(get_db)):
     import json
+    from app.models.blocked_date import BlockedDate
+
+    blocked_rows = db.query(BlockedDate.block_date).order_by(BlockedDate.block_date).all()
+    blocked_dates = [r[0].isoformat() for r in blocked_rows]
+
     settings = db.query(BusinessSettings).first()
 
     if not settings:
@@ -183,12 +188,14 @@ def get_public_settings(db: Session = Depends(get_db)):
             "work_end": "18:00:00",
             "working_days": "0,1,2,3,4",
             "hours_per_day": {},
+            "blocked_dates": blocked_dates,
         }
 
     out = {
         "work_start": settings.work_start.strftime("%H:%M:%S"),
         "work_end": settings.work_end.strftime("%H:%M:%S"),
         "working_days": settings.working_days,
+        "blocked_dates": blocked_dates,
     }
     raw = getattr(settings, "hours_per_day", None)
     try:

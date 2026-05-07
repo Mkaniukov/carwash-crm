@@ -16,7 +16,9 @@ from app.models.service import Service
 from app.models.booking import Booking, BookingSource
 from app.models.settings import BusinessSettings
 from app.models.work_time import WorkTime
+from app.models.blocked_date import BlockedDate
 from app.services.email_service import send_cancellation_email, send_booking_notifications_to_owner_list
+from app.services.booking_service import raise_if_day_blocked
 from app.core.schedule import get_work_hours_for_weekday
 
 router = APIRouter(prefix="/owner", tags=["owner"])
@@ -330,6 +332,7 @@ def owner_reschedule_booking(
     start_time = datetime.fromisoformat(body.start_time.replace("Z", "+00:00"))
     if start_time.tzinfo:
         start_time = start_time.replace(tzinfo=None)
+    raise_if_day_blocked(db, start_time)
     service = db.query(Service).filter(Service.id == booking.service_id).first()
     settings = db.query(BusinessSettings).first()
     end_time = start_time + timedelta(minutes=service.duration)
@@ -358,6 +361,70 @@ def owner_reschedule_booking(
     db.commit()
     db.refresh(booking)
     return booking
+
+
+# =====================================================
+# BLOCKED DATES (holidays + worker full-day locks)
+# =====================================================
+class BlockedDateBody(BaseModel):
+    date: str
+    note: Optional[str] = None
+
+
+def _blocked_date_row_dict(row: BlockedDate, db: Session) -> dict:
+    creator_name = None
+    if row.created_by:
+        u = db.query(User).filter(User.id == row.created_by).first()
+        creator_name = u.username if u else None
+    return {
+        "id": row.id,
+        "block_date": row.block_date.isoformat(),
+        "note": row.note or "",
+        "kind": row.kind,
+        "creator_username": creator_name,
+    }
+
+
+@router.get("/blocked-dates")
+def owner_list_blocked_dates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    rows = db.query(BlockedDate).order_by(BlockedDate.block_date).all()
+    return [_blocked_date_row_dict(r, db) for r in rows]
+
+
+@router.post("/blocked-dates")
+def owner_add_blocked_date(
+    body: BlockedDateBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    try:
+        d = datetime.strptime(body.date.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    if db.query(BlockedDate).filter(BlockedDate.block_date == d).first():
+        raise HTTPException(status_code=400, detail="This date is already blocked")
+    row = BlockedDate(block_date=d, note=(body.note or "").strip() or None, kind="holiday", created_by=None)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _blocked_date_row_dict(row, db)
+
+
+@router.delete("/blocked-dates/{row_id}")
+def owner_delete_blocked_date(
+    row_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),
+):
+    row = db.query(BlockedDate).filter(BlockedDate.id == row_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.delete(row)
+    db.commit()
+    return {"message": "Deleted"}
 
 
 # =====================================================

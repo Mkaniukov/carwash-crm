@@ -6,7 +6,13 @@ import secrets
 from app.models.booking import Booking
 from app.models.service import Service
 from app.models.settings import BusinessSettings
+from app.models.blocked_date import BlockedDate
 from app.core.schedule import get_work_hours_for_weekday
+
+
+def raise_if_day_blocked(db: Session, start_time: datetime):
+    if db.query(BlockedDate).filter(BlockedDate.block_date == start_time.date()).first():
+        raise HTTPException(status_code=400, detail="This date is closed")
 
 
 def create_booking_logic(
@@ -34,6 +40,8 @@ def create_booking_logic(
 
     if start_time < datetime.utcnow() - timedelta(minutes=2):
         raise HTTPException(status_code=400, detail="Start time must be in the future")
+
+    raise_if_day_blocked(db, start_time)
 
     # Compute end time
     end_time = start_time + timedelta(minutes=service.duration)

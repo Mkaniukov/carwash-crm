@@ -10,7 +10,8 @@ import {
 } from "../utils/date";
 import { getErrorMessage } from "../utils/error";
 
-export function useAvailableSlots(date, service) {
+/** `refreshKey` increments e.g. after creating/cancelling a booking so slots refetch for the same day. */
+export function useAvailableSlots(date, service, refreshKey = 0) {
   const [settings, setSettings] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,7 @@ export function useAvailableSlots(date, service) {
         if (!cancelled) setBookings([]);
       });
     return () => { cancelled = true; };
-  }, [settings, date]);
+  }, [settings, date, refreshKey]);
 
   const slots = useMemo(() => {
     if (!settings || !date) return [];

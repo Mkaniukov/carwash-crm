@@ -11,6 +11,7 @@ import { formatDateTime } from "../../utils/date";
 export default function Schedule() {
   const [bookings, setBookings] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [blockedList, setBlockedList] = useState([]);
   const [workerFilter, setWorkerFilter] = useState("");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,7 @@ export default function Schedule() {
 
   useEffect(() => {
     ownerApi.getWorkers().then(setWorkers).catch(() => setWorkers([]));
+    ownerApi.getBlockedDates().then((b) => setBlockedList(Array.isArray(b) ? b : [])).catch(() => setBlockedList([]));
   }, []);
 
   useEffect(() => loadBookings(), [weekStart, workerFilter]);
@@ -46,6 +48,17 @@ export default function Schedule() {
       loadBookings();
     } catch (err) {
       toast.error(getErrorMessage(err, "Stornierung fehlgeschlagen."));
+    }
+  };
+
+  const removeDayBlock = async (id) => {
+    if (!window.confirm("Tagessperre / Feiertag entfernen?")) return;
+    try {
+      await ownerApi.deleteBlockedDate(id);
+      toast.success("Entfernt.");
+      ownerApi.getBlockedDates().then((b) => setBlockedList(Array.isArray(b) ? b : [])).catch(() => {});
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Fehler."));
     }
   };
 
@@ -113,6 +126,22 @@ export default function Schedule() {
               <h3 className={`schedule-day__title ${isToday(day) ? "schedule-day__title--today" : ""}`}>
                 {format(day, "EEEE, d.", { locale: de })}
               </h3>
+              {(() => {
+                const dayKey = format(day, "yyyy-MM-dd");
+                const dayBlock = blockedList.find((x) => x.block_date === dayKey);
+                if (!dayBlock) return null;
+                return (
+                  <div className="schedule-day__blocked-banner" style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}>
+                    <strong>Ganzer Tag gesperrt</strong>
+                    {dayBlock.kind === "holiday" && " (Feiertag)"}
+                    {dayBlock.kind === "worker_block" && dayBlock.creator_username && ` (${dayBlock.creator_username})`}
+                    {dayBlock.note && ` · ${dayBlock.note}`}
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeDayBlock(dayBlock.id)} style={{ marginLeft: "0.5rem" }}>
+                      Entfernen
+                    </Button>
+                  </div>
+                );
+              })()}
               <div className="schedule-day__list">
                 {(bookingsByDay[format(day, "yyyy-MM-dd")] || []).length === 0 ? (
                   <p className="schedule-day__empty">Keine Termine</p>

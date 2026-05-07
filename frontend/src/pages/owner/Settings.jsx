@@ -4,6 +4,8 @@ import Layout from "../../components/Layout";
 import { Card, Button, Input } from "../../components/ui";
 import { ownerApi } from "../../lib/api";
 import { getErrorMessage } from "../../utils/error";
+import { format, parseISO } from "date-fns";
+import { de } from "date-fns/locale";
 
 const DAY_LABELS = [
   { value: "0", label: "Mo" },
@@ -66,14 +68,28 @@ export default function Settings() {
   const [notificationEmails, setNotificationEmails] = useState([]);
   const [newEmail, setNewEmail] = useState("");
   const [emailsSaving, setEmailsSaving] = useState(false);
+  const [blockedList, setBlockedList] = useState([]);
+  const [holidayDate, setHolidayDate] = useState("");
+  const [holidayNote, setHolidayNote] = useState("");
+
+  const loadBlockedList = () => {
+    ownerApi
+      .getBlockedDates()
+      .then((b) => setBlockedList(Array.isArray(b) ? b : []))
+      .catch(() => setBlockedList([]));
+  };
 
   useEffect(() => {
-    ownerApi
-      .getSettings()
-      .then((s) => {
+    setLoading(true);
+    Promise.all([
+      ownerApi.getSettings(),
+      ownerApi.getBlockedDates().catch(() => []),
+    ])
+      .then(([s, blk]) => {
         setHoursPerDay(hoursPerDayFromSettings(s));
         const emails = Array.isArray(s.notification_emails) ? s.notification_emails : [];
         setNotificationEmails(emails);
+        setBlockedList(Array.isArray(blk) ? blk : []);
       })
       .catch(() => {
         toast.error("Einstellungen konnten nicht geladen werden.");
@@ -180,6 +196,33 @@ export default function Settings() {
     }
   };
 
+  const addHolidayDay = async (e) => {
+    e?.preventDefault();
+    if (!holidayDate) {
+      toast.error("Bitte ein Datum wählen.");
+      return;
+    }
+    try {
+      await ownerApi.addBlockedDate({ date: holidayDate, note: holidayNote.trim() || undefined });
+      toast.success("Tag wurde als geschlossen gespeichert.");
+      setHolidayNote("");
+      loadBlockedList();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Speichern fehlgeschlagen."));
+    }
+  };
+
+  const removeBlocked = async (id) => {
+    if (!window.confirm("Diesen geschlossenen Tag entfernen?")) return;
+    try {
+      await ownerApi.deleteBlockedDate(id);
+      toast.success("Entfernt.");
+      loadBlockedList();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Löschen fehlgeschlagen."));
+    }
+  };
+
   if (loading) {
     return (
       <Layout role="owner">
@@ -238,6 +281,53 @@ export default function Settings() {
             <Button type="submit" loading={saving}>Speichern</Button>
           </div>
         </form>
+      </Card>
+
+      <Card className="settings-form__card">
+        <h3 className="settings-form__section">Geschlossene Tage (Feiertage)</h3>
+        <p className="settings-form__hint">
+          An diesen Tagen sind keine Online-Buchungen und keine Termine möglich. Mitarbeiter können zusätzlich selbst ganze Tage sperren (werden hier mit angezeigt).
+        </p>
+        <form onSubmit={addHolidayDay} className="settings-form">
+          <div className="settings-form__row" style={{ alignItems: "flex-end", gap: "0.5rem", flexWrap: "wrap" }}>
+            <Input
+              label="Datum"
+              type="date"
+              value={holidayDate}
+              onChange={(e) => setHolidayDate(e.target.value)}
+            />
+            <Input
+              label="Notiz (optional)"
+              type="text"
+              value={holidayNote}
+              onChange={(e) => setHolidayNote(e.target.value)}
+              placeholder="z. B. Weihnachten"
+            />
+            <Button type="submit">Hinzufügen</Button>
+          </div>
+        </form>
+        {blockedList.length > 0 && (
+          <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0" }}>
+            {[...blockedList]
+              .sort((a, b) => (a.block_date || "").localeCompare(b.block_date || ""))
+              .map((row) => (
+                <li
+                  key={row.id}
+                  style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem", flexWrap: "wrap" }}
+                >
+                  <span style={{ flex: 1 }}>
+                    {format(parseISO(row.block_date), "EEEE, d. MMM yyyy", { locale: de })}
+                    {row.kind === "holiday" && " · Feiertag"}
+                    {row.kind === "worker_block" && row.creator_username && ` · Mitarbeiter: ${row.creator_username}`}
+                    {row.note && ` — ${row.note}`}
+                  </span>
+                  <Button type="button" variant="secondary" onClick={() => removeBlocked(row.id)}>
+                    Entfernen
+                  </Button>
+                </li>
+              ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="settings-form__card">

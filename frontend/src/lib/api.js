@@ -97,6 +97,9 @@ export const ownerApi = {
     api.get("/owner/customers", { params }).then((r) => r.data),
   getCustomersExport: () =>
     api.get("/owner/customers/export", { responseType: "blob" }).then((r) => r.data),
+  getBlockedDates: () => api.get("/owner/blocked-dates").then((r) => r.data),
+  addBlockedDate: (body) => api.post("/owner/blocked-dates", body).then((r) => r.data),
+  deleteBlockedDate: (id) => api.delete(`/owner/blocked-dates/${id}`).then((r) => r.data),
 };
 
 // Worker
@@ -117,6 +120,9 @@ export const workerApi = {
     api.get("/worker/time", { params }).then((r) => r.data),
   workTimeUpdate: (id, body) =>
     api.put(`/worker/time/${id}`, body).then((r) => r.data),
+  getBlockedDates: () => api.get("/worker/blocked-dates").then((r) => r.data),
+  addBlockedDate: (body) => api.post("/worker/blocked-dates", body).then((r) => r.data),
+  deleteBlockedDate: (id) => api.delete(`/worker/blocked-dates/${id}`).then((r) => r.data),
 };
 
 export default api;
